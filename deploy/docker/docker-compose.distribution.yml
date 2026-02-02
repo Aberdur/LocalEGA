@@ -1,0 +1,44 @@
+services:
+  distribution:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/distribution/Dockerfile
+    image: localega/distribution:latest
+    container_name: distribution
+    ports:
+      - "2224:2223"
+    networks:
+      - vault
+    environment:
+      FUSE_DB_DSN: ${FUSE_DB_DSN:?set FUSE_DB_DSN (e.g. postgresql://distribution:${DISTRIBUTION_DB_PASSWORD:?set DISTRIBUTION_DB_PASSWORD}@vault-db:5432/ega?application_name=EGADistFS)}
+    volumes:
+      - ${LOCALEGA_BASE:-/opt/LocalEGA}/vault:/opt/LocalEGA/vault:ro
+      - ${LOCALEGA_BASE:-/opt/LocalEGA}/vault.bkp:/opt/LocalEGA/vault.bkp:ro
+      - ${LOCALEGA_BASE:-/opt/LocalEGA}/etc:/opt/LocalEGA/etc
+      - ${LOCALEGA_BASE:-/opt/LocalEGA}/homes:/opt/LocalEGA/homes
+    devices:
+      - /dev/fuse:/dev/fuse
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
+    restart: unless-stopped
+    depends_on:
+      - nss-sync
+
+  nss-sync:
+    image: ubuntu:22.04
+    container_name: nss-sync
+    environment:
+      SYNC_INTERVAL_SECONDS: ${SYNC_INTERVAL_SECONDS:-60}
+    volumes:
+      - ${LOCALEGA_BASE:-/opt/LocalEGA}/etc:/opt/LocalEGA/etc
+      - ${LOCALEGA_BASE:-/opt/LocalEGA}/homes:/opt/LocalEGA/homes
+      - ./distribution/nss-sync.sh:/usr/local/bin/nss-sync.sh:ro
+    networks:
+      - vault
+    entrypoint: ["/bin/bash", "/usr/local/bin/nss-sync.sh"]
+    restart: unless-stopped
+
+networks:
+  vault:

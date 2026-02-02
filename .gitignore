@@ -16,7 +16,10 @@ deploy/docker/*
 !deploy/docker/Makefile
 !deploy/docker/README.md
 !deploy/docker/*.sample
+!deploy/docker/docker-compose.distribution.yml
 !deploy/docker/cega
+!deploy/docker/distribution
+!deploy/docker/distribution/**
 
 
 # =====================================

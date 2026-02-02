@@ -2,6 +2,7 @@
 CONTRIBUTING.md
 deploy
 !deploy/requirements.txt
+!deploy/docker/distribution/**
 Dockerfile
 docs
 lega.*

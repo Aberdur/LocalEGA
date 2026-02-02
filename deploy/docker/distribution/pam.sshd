@@ -1,0 +1,18 @@
+#%PAM-1.0
+#
+# PAM configuration for the SFTP EGA service (container)
+#
+
+# Check the passwords. Die if it fails. We don't allow root to try
+auth       requisite    pam_ega_auth.so
+
+# Create homedir before chroot validation
+account    requisite    pam_ega_homedir.so subdir=outbox attrs=02700 bail_on_exists
+
+# Validate the user exists in NSS
+account    requisite    pam_ega_localnss.so group=lega display=requesters
+
+# No can do
+password   required     pam_deny.so
+
+session    requisite    pam_ega_mount.so supp_group=lega umask=0007 unmount_on_close conf=conf_fd:/opt/LocalEGA/etc/fuse-vault-db.conf lock=/run/%s.lock mnt=/opt/LocalEGA/homes/%s/outbox child_notify=parent_fd -- /opt/LocalEGA/bin/crypt4gh-db.fs -f -o ro,default_permissions,allow_root,fsname=EGAFS,max_idle_threads=2

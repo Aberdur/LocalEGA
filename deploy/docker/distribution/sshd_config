@@ -1,0 +1,35 @@
+Port 2223
+PidFile /run/ega-sshd/sshd.pid
+
+Banner /opt/LocalEGA/etc/sshd/banner
+
+HostKey /opt/LocalEGA/etc/sshd/host_ed25519_key
+HostKey /opt/LocalEGA/etc/sshd/host_rsa_key
+
+UseDNS no
+
+UsePAM yes
+PasswordAuthentication no
+ChallengeResponseAuthentication yes
+AuthenticationMethods keyboard-interactive:pam
+
+DenyUsers root
+AllowGroups requesters
+
+PermitRootLogin no
+PermitEmptyPasswords no
+
+DisableForwarding yes
+
+Subsystem sftp internal-sftp -d outbox -R
+ForceCommand internal-sftp -d outbox -R
+
+ChrootDirectory %h
+
+AuthorizedKeysCommand /usr/bin/cat /opt/LocalEGA/etc/authorized_keys/%U
+AuthorizedKeysCommandUser postgres
+
+Compression no
+
+LoginGraceTime 30
+MaxStartups 10:30:60

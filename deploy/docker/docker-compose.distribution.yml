@@ -10,12 +10,15 @@ services:
     networks:
       - vault
     environment:
-      FUSE_DB_DSN: ${FUSE_DB_DSN:?set FUSE_DB_DSN (e.g. postgresql://distribution:${DISTRIBUTION_DB_PASSWORD:?set DISTRIBUTION_DB_PASSWORD}@vault-db:5432/ega?application_name=EGADistFS)}
+      FUSE_DB_DSN: ${FUSE_DB_DSN:-postgresql://distribution:${DISTRIBUTION_DB_PASSWORD:-another-strong-password}@vault-db:5432/ega?application_name=EGADistFS}
+      EGA_PRECREATE_HOMES: ${EGA_PRECREATE_HOMES:-1}
     volumes:
-      - ${LOCALEGA_BASE:-/opt/LocalEGA}/vault:/opt/LocalEGA/vault:ro
-      - ${LOCALEGA_BASE:-/opt/LocalEGA}/vault.bkp:/opt/LocalEGA/vault.bkp:ro
-      - ${LOCALEGA_BASE:-/opt/LocalEGA}/etc:/opt/LocalEGA/etc
-      - ${LOCALEGA_BASE:-/opt/LocalEGA}/homes:/opt/LocalEGA/homes
+      - ${LOCALEGA_BASE:-./data}/vault:/opt/LocalEGA/vault:ro
+      - ${LOCALEGA_BASE:-./data}/vault.bkp:/opt/LocalEGA/vault.bkp:ro
+      - ${LOCALEGA_BASE:-./data}/etc:/opt/LocalEGA/etc
+      - ${LOCALEGA_RUNTIME_BASE:-./data}/homes:/opt/LocalEGA/homes
+      - ./distribution/pam.sshd.nfs:/usr/local/share/ega/pam.sshd:ro
+      - ./distribution/mount-outbox-nfs.sh:/usr/local/bin/mount-outbox-nfs.sh:ro
     devices:
       - /dev/fuse:/dev/fuse
     cap_add:
@@ -32,8 +35,8 @@ services:
     environment:
       SYNC_INTERVAL_SECONDS: ${SYNC_INTERVAL_SECONDS:-60}
     volumes:
-      - ${LOCALEGA_BASE:-/opt/LocalEGA}/etc:/opt/LocalEGA/etc
-      - ${LOCALEGA_BASE:-/opt/LocalEGA}/homes:/opt/LocalEGA/homes
+      - ${LOCALEGA_BASE:-./data}/etc:/opt/LocalEGA/etc
+      - ${LOCALEGA_RUNTIME_BASE:-./data}/homes:/opt/LocalEGA/homes
       - ./distribution/nss-sync.sh:/usr/local/bin/nss-sync.sh:ro
     networks:
       - vault

@@ -8,12 +8,15 @@ ensure_homes() {
   if [[ ! -f "${users_file}" ]]; then
     return
   fi
-  while IFS=: read -r _ _ _ gid _ homedir _; do
-    if [[ -n "${homedir}" && ! -d "${homedir}" ]]; then
-      mkdir -p "${homedir}"
-      chown root:"${gid}" "${homedir}"
-      chmod 0550 "${homedir}"
+  while IFS=: read -r _ _ uid gid _ homedir _; do
+    if [[ -z "${homedir}" ]]; then
+      continue
     fi
+    mkdir -p "${homedir}/outbox"
+    chown root:"${gid}" "${homedir}"
+    chmod 0550 "${homedir}"
+    chown "${uid}:${gid}" "${homedir}/outbox"
+    chmod 2700 "${homedir}/outbox"
   done < "${users_file}"
 }
 

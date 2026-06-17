@@ -11,12 +11,12 @@ services:
       - vault
     environment:
       FUSE_DB_DSN: ${FUSE_DB_DSN:-postgresql://distribution:${DISTRIBUTION_DB_PASSWORD:-another-strong-password}@vault-db:5432/ega?application_name=EGADistFS}
-      EGA_PRECREATE_HOMES: ${EGA_PRECREATE_HOMES:-1}
+      EGA_PRECREATE_HOMES: ${EGA_PRECREATE_HOMES:-0}
     volumes:
       - ${LOCALEGA_BASE:-./data}/vault:/opt/LocalEGA/vault:ro
       - ${LOCALEGA_BASE:-./data}/vault.bkp:/opt/LocalEGA/vault.bkp:ro
       - ${LOCALEGA_BASE:-./data}/etc:/opt/LocalEGA/etc
-      - ${LOCALEGA_RUNTIME_BASE:-./data}/homes:/opt/LocalEGA/homes
+      - ${LOCALEGA_RUNTIME_BASE:-./data}/homes:/opt/LocalEGA/homes:z
       - ./distribution/pam.sshd.nfs:/usr/local/share/ega/pam.sshd:ro
       - ./distribution/mount-outbox-nfs.sh:/usr/local/bin/mount-outbox-nfs.sh:ro
     devices:
@@ -36,7 +36,7 @@ services:
       SYNC_INTERVAL_SECONDS: ${SYNC_INTERVAL_SECONDS:-60}
     volumes:
       - ${LOCALEGA_BASE:-./data}/etc:/opt/LocalEGA/etc
-      - ${LOCALEGA_RUNTIME_BASE:-./data}/homes:/opt/LocalEGA/homes
+      - ${LOCALEGA_RUNTIME_BASE:-./data}/homes:/opt/LocalEGA/homes:z
       - ./distribution/nss-sync.sh:/usr/local/bin/nss-sync.sh:ro
     networks:
       - vault

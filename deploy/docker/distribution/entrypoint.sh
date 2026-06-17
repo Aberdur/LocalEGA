@@ -14,7 +14,7 @@ fi
 
 mkdir -p /run/ega-sshd /opt/LocalEGA/etc/sshd /opt/LocalEGA/homes /opt/LocalEGA/etc/nss
 chmod 0755 /run/ega-sshd
-chown root:root /opt/LocalEGA/homes
+chown root:root /opt/LocalEGA/homes 2>/dev/null || true
 chmod 0755 /opt/LocalEGA/homes
 
 if [[ -f "${SSHD_CONFIG_TEMPLATE}" ]]; then

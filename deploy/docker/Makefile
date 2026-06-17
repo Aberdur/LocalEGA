@@ -1,9 +1,18 @@
 SHELL := /bin/bash
 
-LEGA_UID := $(shell id -u lega)
-LEGA_GID := $(shell id -g lega)
+LEGA_UID := $(shell id -u lega 2>/dev/null)
+LEGA_GID := $(shell id -g lega 2>/dev/null)
 # LEGA_UID := $(shell id -u)
 # LEGA_GID := $(shell id -g)
+
+DOCKER ?= podman
+SUDO ?= sudo
+LOCALEGA_BASE ?= /impact_data/lega_data/lega
+NFS_IDMAP_DIR ?= /tmp/localega-idmap
+REQUESTERS_GID ?= 20000
+POSTGRES_UID ?= 999
+POSTGRES_GID ?= 999
+INBOX_GID ?= 1003
 
 #############################
 ## Build docker images
@@ -126,3 +135,210 @@ sftp:
 
 permission:
 	curl http://localhost:8080/permission/jane/EGAD90000000123
+
+
+#############################
+## Rootless Podman + NFS deployment helpers
+#############################
+
+.PHONY: nfs-help nfs-vars nfs-check nfs-init-layout nfs-print-layout-sudo \
+	nfs-prepare-inbox-user nfs-print-inbox-user-sudo \
+	nfs-prepare-distribution-user nfs-print-distribution-user-sudo \
+	nfs-refresh-distribution-nss nfs-stack-ps nfs-stack-logs
+
+nfs-help:
+	@echo "LocalEGA rootless Podman + NFS helpers"
+	@echo
+	@echo "Variables:"
+	@echo "  LOCALEGA_BASE=$(LOCALEGA_BASE)"
+	@echo "  DOCKER=$(DOCKER)"
+	@echo "  SUDO=$(SUDO)"
+	@echo
+	@echo "Non-sudo checks:"
+	@echo "  make nfs-vars"
+	@echo "  make nfs-check"
+	@echo "  make nfs-stack-ps"
+	@echo "  make nfs-stack-logs"
+	@echo
+	@echo "Base NFS layout:"
+	@echo "  make nfs-print-layout-sudo"
+	@echo "  make nfs-init-layout"
+	@echo
+	@echo "Inbox user preparation:"
+	@echo "  make nfs-print-inbox-user-sudo USER_EMAIL=user@example.org"
+	@echo "  make nfs-prepare-inbox-user USER_EMAIL=user@example.org"
+	@echo
+	@echo "Distribution requester preparation:"
+	@echo "  make nfs-refresh-distribution-nss"
+	@echo "  make nfs-print-distribution-user-sudo USER_EMAIL=user@example.org"
+	@echo "  make nfs-prepare-distribution-user USER_EMAIL=user@example.org"
+
+nfs-vars:
+	@echo "DOCKER=$(DOCKER)"
+	@echo "SUDO=$(SUDO)"
+	@echo "LOCALEGA_BASE=$(LOCALEGA_BASE)"
+	@echo "NFS_IDMAP_DIR=$(NFS_IDMAP_DIR)"
+	@echo "INBOX_GID=$(INBOX_GID)"
+	@echo "REQUESTERS_GID=$(REQUESTERS_GID)"
+	@echo "POSTGRES_UID=$(POSTGRES_UID)"
+	@echo "POSTGRES_GID=$(POSTGRES_GID)"
+
+nfs-stack-ps:
+	@$(DOCKER) ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | egrep 'mq|vault-db|inbox|handler|distribution|nss-sync' || true
+
+nfs-stack-logs:
+	@for c in mq vault-db inbox handler distribution nss-sync; do \
+		echo; \
+		echo "===== $$c ====="; \
+		$(DOCKER) ps -a --filter name="^$${c}$$" --format "STATUS: {{.Status}}"; \
+		$(DOCKER) logs --tail=30 "$$c" 2>&1 | egrep -i 'error|fatal|failed|denied|refused|critical|panic|exception|ready|listening|consuming|connected|accept' || true; \
+	done
+
+nfs-check:
+	@set -euo pipefail; \
+	echo "Checking $(LOCALEGA_BASE)"; \
+	test -d "$(LOCALEGA_BASE)" || { echo "Missing LOCALEGA_BASE=$(LOCALEGA_BASE)"; exit 1; }; \
+	ls -ldn "$(LOCALEGA_BASE)" "$(LOCALEGA_BASE)"/inbox "$(LOCALEGA_BASE)"/staging "$(LOCALEGA_BASE)"/vault "$(LOCALEGA_BASE)"/vault.bkp "$(LOCALEGA_BASE)"/vault-db "$(LOCALEGA_BASE)"/etc/nss "$(LOCALEGA_BASE)"/etc/authorized_keys "$(LOCALEGA_BASE)"/homes 2>/dev/null || true; \
+	echo; \
+	$(DOCKER) ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | egrep 'mq|vault-db|inbox|handler|distribution|nss-sync' || true
+
+nfs-print-layout-sudo:
+	@set -euo pipefail; \
+	mkdir -p "$(NFS_IDMAP_DIR)"; \
+	map_id() { \
+		label="$$1"; uid="$$2"; gid="$$3"; f="$(NFS_IDMAP_DIR)/$$label"; \
+		rm -f "$$f"; touch "$$f"; \
+		$(DOCKER) unshare chown "$$uid:$$gid" "$$f"; \
+		stat -c '%u:%g' "$$f"; \
+	}; \
+	inbox_owner="$$(map_id inbox-root $(INBOX_GID) $(INBOX_GID))"; \
+	postgres_owner="$$(map_id postgres $(POSTGRES_UID) $(POSTGRES_GID))"; \
+	vault_owner="$$(map_id vault $(INBOX_GID) $(REQUESTERS_GID))"; \
+	echo "# Review and run with sudo if correct"; \
+	echo "$(SUDO) mkdir -p $(LOCALEGA_BASE)/{inbox,staging,vault,vault.bkp,vault-db,etc/nss,etc/authorized_keys,homes,sqlite-boxes}"; \
+	echo "$(SUDO) touch $(LOCALEGA_BASE)/etc/nss/{users,groups,passwords}"; \
+	echo "$(SUDO) chown -R $$inbox_owner $(LOCALEGA_BASE)/inbox $(LOCALEGA_BASE)/staging"; \
+	echo "$(SUDO) chmod 2775 $(LOCALEGA_BASE)/inbox"; \
+	echo "$(SUDO) chmod 2770 $(LOCALEGA_BASE)/staging"; \
+	echo "$(SUDO) chown -R $$postgres_owner $(LOCALEGA_BASE)/vault-db $(LOCALEGA_BASE)/etc/nss $(LOCALEGA_BASE)/etc/authorized_keys $(LOCALEGA_BASE)/sqlite-boxes"; \
+	echo "$(SUDO) chmod 700 $(LOCALEGA_BASE)/vault-db"; \
+	echo "$(SUDO) chmod 775 $(LOCALEGA_BASE)/etc/nss $(LOCALEGA_BASE)/etc/authorized_keys $(LOCALEGA_BASE)/sqlite-boxes"; \
+	echo "$(SUDO) chmod 664 $(LOCALEGA_BASE)/etc/nss/users $(LOCALEGA_BASE)/etc/nss/groups"; \
+	echo "$(SUDO) chmod 640 $(LOCALEGA_BASE)/etc/nss/passwords"; \
+	echo "$(SUDO) chown -R $$vault_owner $(LOCALEGA_BASE)/vault $(LOCALEGA_BASE)/vault.bkp"; \
+	echo "$(SUDO) find $(LOCALEGA_BASE)/vault $(LOCALEGA_BASE)/vault.bkp -type d -exec chmod 2750 {} \\;"; \
+	echo "$(SUDO) find $(LOCALEGA_BASE)/vault $(LOCALEGA_BASE)/vault.bkp -type f -exec chmod 640 {} \\;"
+
+nfs-init-layout:
+	@set -euo pipefail; \
+	mkdir -p "$(NFS_IDMAP_DIR)"; \
+	map_id() { \
+		label="$$1"; uid="$$2"; gid="$$3"; f="$(NFS_IDMAP_DIR)/$$label"; \
+		rm -f "$$f"; touch "$$f"; \
+		$(DOCKER) unshare chown "$$uid:$$gid" "$$f"; \
+		stat -c '%u:%g' "$$f"; \
+	}; \
+	inbox_owner="$$(map_id inbox-root $(INBOX_GID) $(INBOX_GID))"; \
+	postgres_owner="$$(map_id postgres $(POSTGRES_UID) $(POSTGRES_GID))"; \
+	vault_owner="$$(map_id vault $(INBOX_GID) $(REQUESTERS_GID))"; \
+	echo "Creating NFS layout under $(LOCALEGA_BASE)"; \
+	$(SUDO) mkdir -p "$(LOCALEGA_BASE)"/{inbox,staging,vault,vault.bkp,vault-db,etc/nss,etc/authorized_keys,homes,sqlite-boxes}; \
+	$(SUDO) touch "$(LOCALEGA_BASE)"/etc/nss/{users,groups,passwords}; \
+	echo "Preparing inbox/staging as $$inbox_owner"; \
+	$(SUDO) chown -R "$$inbox_owner" "$(LOCALEGA_BASE)"/inbox "$(LOCALEGA_BASE)"/staging; \
+	$(SUDO) chmod 2775 "$(LOCALEGA_BASE)"/inbox; \
+	$(SUDO) chmod 2770 "$(LOCALEGA_BASE)"/staging; \
+	echo "Preparing vault-db/NSS as $$postgres_owner"; \
+	$(SUDO) chown -R "$$postgres_owner" "$(LOCALEGA_BASE)"/vault-db "$(LOCALEGA_BASE)"/etc/nss "$(LOCALEGA_BASE)"/etc/authorized_keys "$(LOCALEGA_BASE)"/sqlite-boxes; \
+	$(SUDO) chmod 700 "$(LOCALEGA_BASE)"/vault-db; \
+	$(SUDO) chmod 775 "$(LOCALEGA_BASE)"/etc/nss "$(LOCALEGA_BASE)"/etc/authorized_keys "$(LOCALEGA_BASE)"/sqlite-boxes; \
+	$(SUDO) chmod 664 "$(LOCALEGA_BASE)"/etc/nss/users "$(LOCALEGA_BASE)"/etc/nss/groups; \
+	$(SUDO) chmod 640 "$(LOCALEGA_BASE)"/etc/nss/passwords; \
+	echo "Preparing vault/vault.bkp as $$vault_owner"; \
+	$(SUDO) chown -R "$$vault_owner" "$(LOCALEGA_BASE)"/vault "$(LOCALEGA_BASE)"/vault.bkp; \
+	$(SUDO) find "$(LOCALEGA_BASE)"/vault "$(LOCALEGA_BASE)"/vault.bkp -type d -exec chmod 2750 {} \; ; \
+	$(SUDO) find "$(LOCALEGA_BASE)"/vault "$(LOCALEGA_BASE)"/vault.bkp -type f -exec chmod 640 {} \; ; \
+	$(MAKE) nfs-check LOCALEGA_BASE="$(LOCALEGA_BASE)" DOCKER="$(DOCKER)"
+
+nfs-print-inbox-user-sudo:
+	@test -n "$(USER_EMAIL)" || { echo "Usage: make $@ USER_EMAIL=user@example.org"; exit 2; }
+	@set -euo pipefail; \
+	uid="$$( $(DOCKER) exec inbox id -u '$(USER_EMAIL)' )"; \
+	gid="$$( $(DOCKER) exec inbox id -g '$(USER_EMAIL)' )"; \
+	mkdir -p "$(NFS_IDMAP_DIR)"; \
+	f="$(NFS_IDMAP_DIR)/inbox-$$(echo '$(USER_EMAIL)' | tr -c 'A-Za-z0-9_.@-' '_')"; \
+	rm -f "$$f"; touch "$$f"; \
+	$(DOCKER) unshare chown "$$uid:$$gid" "$$f"; \
+	host_owner="$$(stat -c '%u:%g' "$$f")"; \
+	echo "# inbox user: $(USER_EMAIL)"; \
+	echo "# container UID:GID $$uid:$$gid -> host $$host_owner"; \
+	echo "$(SUDO) mkdir -p '$(LOCALEGA_BASE)/inbox/$(USER_EMAIL)'"; \
+	echo "$(SUDO) chown $$host_owner '$(LOCALEGA_BASE)/inbox/$(USER_EMAIL)'"; \
+	echo "$(SUDO) chmod 2755 '$(LOCALEGA_BASE)/inbox/$(USER_EMAIL)'"
+
+nfs-prepare-inbox-user:
+	@test -n "$(USER_EMAIL)" || { echo "Usage: make $@ USER_EMAIL=user@example.org"; exit 2; }
+	@set -euo pipefail; \
+	uid="$$( $(DOCKER) exec inbox id -u '$(USER_EMAIL)' )"; \
+	gid="$$( $(DOCKER) exec inbox id -g '$(USER_EMAIL)' )"; \
+	mkdir -p "$(NFS_IDMAP_DIR)"; \
+	f="$(NFS_IDMAP_DIR)/inbox-$$(echo '$(USER_EMAIL)' | tr -c 'A-Za-z0-9_.@-' '_')"; \
+	rm -f "$$f"; touch "$$f"; \
+	$(DOCKER) unshare chown "$$uid:$$gid" "$$f"; \
+	host_owner="$$(stat -c '%u:%g' "$$f")"; \
+	echo "Preparing Inbox home for $(USER_EMAIL): container $$uid:$$gid -> host $$host_owner"; \
+	$(SUDO) mkdir -p "$(LOCALEGA_BASE)/inbox/$(USER_EMAIL)"; \
+	$(SUDO) chown "$$host_owner" "$(LOCALEGA_BASE)/inbox/$(USER_EMAIL)"; \
+	$(SUDO) chmod 2755 "$(LOCALEGA_BASE)/inbox/$(USER_EMAIL)"; \
+	$(DOCKER) exec --user "$$uid:$$gid" inbox stat -c '%n %u:%g %a %A' "/ega/inbox/$(USER_EMAIL)"
+
+nfs-refresh-distribution-nss:
+	@$(DOCKER) exec -i vault-db psql -U postgres -d ega -c "SELECT * FROM nss.make_users();"
+	@$(DOCKER) exec -i vault-db psql -U postgres -d ega -c "SELECT * FROM nss.make_groups();"
+	@$(DOCKER) exec -i vault-db psql -U postgres -d ega -c "SELECT * FROM nss.make_passwords();"
+	@$(DOCKER) exec -i vault-db psql -U postgres -d ega -c "SELECT nss.make_authorized_keys(id) FROM public.user_table;"
+
+nfs-print-distribution-user-sudo:
+	@test -n "$(USER_EMAIL)" || { echo "Usage: make $@ USER_EMAIL=user@example.org"; exit 2; }
+	@set -euo pipefail; \
+	uid="$$( $(DOCKER) exec distribution id -u '$(USER_EMAIL)' )"; \
+	gid="$$( $(DOCKER) exec distribution id -g '$(USER_EMAIL)' )"; \
+	mkdir -p "$(NFS_IDMAP_DIR)"; \
+	chroot_file="$(NFS_IDMAP_DIR)/dist-chroot-$$(echo '$(USER_EMAIL)' | tr -c 'A-Za-z0-9_.@-' '_')"; \
+	outbox_file="$(NFS_IDMAP_DIR)/dist-outbox-$$(echo '$(USER_EMAIL)' | tr -c 'A-Za-z0-9_.@-' '_')"; \
+	rm -f "$$chroot_file" "$$outbox_file"; touch "$$chroot_file" "$$outbox_file"; \
+	$(DOCKER) unshare chown "0:$$gid" "$$chroot_file"; \
+	$(DOCKER) unshare chown "$$uid:$$gid" "$$outbox_file"; \
+	chroot_owner="$$(stat -c '%u:%g' "$$chroot_file")"; \
+	outbox_owner="$$(stat -c '%u:%g' "$$outbox_file")"; \
+	echo "# distribution user: $(USER_EMAIL)"; \
+	echo "# chroot container 0:$$gid -> host $$chroot_owner"; \
+	echo "# outbox container $$uid:$$gid -> host $$outbox_owner"; \
+	echo "$(SUDO) mkdir -p '$(LOCALEGA_BASE)/homes/$(USER_EMAIL)/outbox'"; \
+	echo "$(SUDO) chown $$chroot_owner '$(LOCALEGA_BASE)/homes/$(USER_EMAIL)'"; \
+	echo "$(SUDO) chmod 2550 '$(LOCALEGA_BASE)/homes/$(USER_EMAIL)'"; \
+	echo "$(SUDO) chown $$outbox_owner '$(LOCALEGA_BASE)/homes/$(USER_EMAIL)/outbox'"; \
+	echo "$(SUDO) chmod 2700 '$(LOCALEGA_BASE)/homes/$(USER_EMAIL)/outbox'"
+
+nfs-prepare-distribution-user:
+	@test -n "$(USER_EMAIL)" || { echo "Usage: make $@ USER_EMAIL=user@example.org"; exit 2; }
+	@set -euo pipefail; \
+	uid="$$( $(DOCKER) exec distribution id -u '$(USER_EMAIL)' )"; \
+	gid="$$( $(DOCKER) exec distribution id -g '$(USER_EMAIL)' )"; \
+	mkdir -p "$(NFS_IDMAP_DIR)"; \
+	chroot_file="$(NFS_IDMAP_DIR)/dist-chroot-$$(echo '$(USER_EMAIL)' | tr -c 'A-Za-z0-9_.@-' '_')"; \
+	outbox_file="$(NFS_IDMAP_DIR)/dist-outbox-$$(echo '$(USER_EMAIL)' | tr -c 'A-Za-z0-9_.@-' '_')"; \
+	rm -f "$$chroot_file" "$$outbox_file"; touch "$$chroot_file" "$$outbox_file"; \
+	$(DOCKER) unshare chown "0:$$gid" "$$chroot_file"; \
+	$(DOCKER) unshare chown "$$uid:$$gid" "$$outbox_file"; \
+	chroot_owner="$$(stat -c '%u:%g' "$$chroot_file")"; \
+	outbox_owner="$$(stat -c '%u:%g' "$$outbox_file")"; \
+	echo "Preparing Distribution home for $(USER_EMAIL)"; \
+	echo "  chroot container 0:$$gid -> host $$chroot_owner"; \
+	echo "  outbox container $$uid:$$gid -> host $$outbox_owner"; \
+	$(SUDO) mkdir -p "$(LOCALEGA_BASE)/homes/$(USER_EMAIL)/outbox"; \
+	$(SUDO) chown "$$chroot_owner" "$(LOCALEGA_BASE)/homes/$(USER_EMAIL)"; \
+	$(SUDO) chmod 2550 "$(LOCALEGA_BASE)/homes/$(USER_EMAIL)"; \
+	$(SUDO) chown "$$outbox_owner" "$(LOCALEGA_BASE)/homes/$(USER_EMAIL)/outbox"; \
+	$(SUDO) chmod 2700 "$(LOCALEGA_BASE)/homes/$(USER_EMAIL)/outbox"; \
+	$(DOCKER) exec distribution stat -c '%n %u:%g %a %A' "/opt/LocalEGA/homes/$(USER_EMAIL)" "/opt/LocalEGA/homes/$(USER_EMAIL)/outbox"

@@ -6,7 +6,7 @@ services:
     image: localega/distribution:latest
     container_name: distribution
     ports:
-      - "2224:2223"
+      - "8087:2223"
     networks:
       - vault
     environment:

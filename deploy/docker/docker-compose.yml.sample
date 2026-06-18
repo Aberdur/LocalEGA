@@ -35,7 +35,7 @@ services:
       # - MQ_CLIENT_CERT=/etc/ega/ssl.cert
       # - MQ_CLIENT_KEY=/etc/ega/ssl.key
     ports:
-      - 2222:9000
+      - 8086:9000
     image: crg/fega-inbox:latest
     volumes:
       - ./data/inbox:/ega/inbox

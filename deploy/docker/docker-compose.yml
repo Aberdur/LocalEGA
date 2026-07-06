@@ -29,7 +29,7 @@ services:
     image: crg/fega-inbox:latest
     build: ../../src/inbox
     volumes:
-      - ${LOCALEGA_BIND_BASE:-/srv/containers/bind/localega}/inbox:/ega/inbox
+      - ${LOCALEGA_DATA_BASE:-/impact_data/lega_data/lega}/inbox:/ega/inbox
       - ${LOCALEGA_LOG_DIR:-/var/log/local/localega/app}/inbox:/var/log/local/localega/app
 
   mq:
@@ -72,10 +72,10 @@ services:
       - ./lega.ini:/etc/ega/lega.ini:ro
       - ./service.key:/etc/ega/service.seckey:ro
       - ./master.key.pub:/etc/ega/master.pubkey:ro
-      - ${LOCALEGA_BIND_BASE:-/srv/containers/bind/localega}/inbox:/ega/inbox
-      - ${LOCALEGA_BIND_BASE:-/srv/containers/bind/localega}/staging:/ega/staging
-      - ${LOCALEGA_BIND_BASE:-/srv/containers/bind/localega}/vault:/ega/vault
-      - ${LOCALEGA_BIND_BASE:-/srv/containers/bind/localega}/vault.bkp:/ega/vault.bkp
+      - ${LOCALEGA_DATA_BASE:-/impact_data/lega_data/lega}/inbox:/ega/inbox
+      - ${LOCALEGA_DATA_BASE:-/impact_data/lega_data/lega}/staging:/ega/staging
+      - ${LOCALEGA_DATA_BASE:-/impact_data/lega_data/lega}/vault:/ega/vault
+      - ${LOCALEGA_DATA_BASE:-/impact_data/lega_data/lega}/vault.bkp:/ega/vault.bkp
       - ${LOCALEGA_LOG_DIR:-/var/log/local/localega/app}/handler:/var/log/local/localega/app
     networks:
       - internal
@@ -90,7 +90,7 @@ services:
     environment:
       PGDATA: /ega/data
     volumes:
-      - ${LOCALEGA_BIND_BASE:-/srv/containers/bind/localega}/vault-db:/ega/data
+      - ${LOCALEGA_DATA_BASE:-/impact_data/lega_data/lega}/vault-db:/ega/data
       - ./pg.conf:/etc/ega/pg.conf:ro
       - ./pg_hba.conf:/etc/ega/pg_hba.conf:ro
       - ${LOCALEGA_BIND_BASE:-/srv/containers/bind/localega}/etc/nss:/etc/ega/nss

@@ -12,8 +12,8 @@ services:
     environment:
       FUSE_DB_DSN: ${FUSE_DB_DSN:?set FUSE_DB_DSN (e.g. postgresql://distribution:${DISTRIBUTION_DB_PASSWORD:?set DISTRIBUTION_DB_PASSWORD}@vault-db:5432/ega?application_name=EGADistFS)}
     volumes:
-      - ${LOCALEGA_BIND_BASE:-/srv/containers/bind/localega}/vault:/opt/LocalEGA/vault:ro
-      - ${LOCALEGA_BIND_BASE:-/srv/containers/bind/localega}/vault.bkp:/opt/LocalEGA/vault.bkp:ro
+      - ${LOCALEGA_DATA_BASE:-/impact_data/lega_data/lega}/vault:/opt/LocalEGA/vault:ro
+      - ${LOCALEGA_DATA_BASE:-/impact_data/lega_data/lega}/vault.bkp:/opt/LocalEGA/vault.bkp:ro
       - ${LOCALEGA_BIND_BASE:-/srv/containers/bind/localega}/etc:/opt/LocalEGA/etc
       - ${LOCALEGA_RUNTIME_BASE:-/srv/containers/bind/localega/runtime}/homes:/opt/LocalEGA/homes
     devices:

@@ -54,21 +54,19 @@ Prepare the storage mountpoints for:
 * the inbox of the users
 * staging area
 * the vault location
-* the backup location
 
 ```bash
 	# Create the directories (some with the setgid bit)
-	mkdir -p data/{inbox,staging,vault,vault.bkp}
+	mkdir -p data/{inbox,staging,vault}
 
 	# Change the ownership
-	chown lega:lega data/{inbox,staging,vault,vault.bkp}
+	chown lega:lega data/{inbox,staging,vault}
 
 	# Change the access permissions
 	chmod 2750 data/inbox # with the setgid bit, the `lega` user can _read_ the inbox files of each user.
 	                      # Other users then the owner can't.
 	chmod 700 data/staging
 	chmod 750 data/vault  # lega group needs r,x in order to distribute files
-	chmod 700 data/vault.bkp
 ```
 Adjust the paths in the `docker-compose.yml` file and the `lega.ini` handler configuration.
 

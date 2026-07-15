@@ -15,8 +15,6 @@ location = /ega/staging/%s
 [vault]
 location = /ega/vault
 
-[backup]
-location = /ega/vault.bkp
 
 [broker]
 connection = env://LEGA_MQ_CONNECTION

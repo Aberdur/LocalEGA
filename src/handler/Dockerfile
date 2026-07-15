@@ -40,19 +40,15 @@ RUN ldconfig -v                            && \
     useradd -M -g lega -u ${LEGA_UID} lega && \
     mkdir -p /ega/staging                  && \
     mkdir -p /ega/vault                    && \
-    mkdir -p /ega/vault.bkp                && \
     mkdir -p /etc/ega                      && \
     chgrp lega /ega/staging                && \
     chgrp lega /ega/vault                  && \
-    chgrp lega /ega/vault.bkp              && \
     chgrp lega /etc/ega                    && \
     chmod 2770 /ega/staging                && \
     chmod 2770 /ega/vault                  && \
-    chmod 2770 /ega/vault.bkp              && \
     chmod 2770 /etc/ega
 
 VOLUME /ega/vault
-VOLUME /ega/vault.bkp
 VOLUME /ega/staging
 VOLUME /etc/ega
 

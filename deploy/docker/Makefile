@@ -72,7 +72,7 @@ ps:
 	docker-compose ps
 
 clean:
-	-rm -rf data/{vault,vault.bkp,staging,inbox}/*
+	-rm -rf data/{vault,staging,inbox}/*
 	-rm -rf data/vault-db
 	-rm -f data/example.txt.c4gh data/example.txt
 

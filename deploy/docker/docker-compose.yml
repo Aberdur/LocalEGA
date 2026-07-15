@@ -76,7 +76,6 @@ services:
       - ${LOCALEGA_DATA_BASE:-/impact_data/lega_data/lega}/inbox:/ega/inbox
       - ${LOCALEGA_DATA_BASE:-/impact_data/lega_data/lega}/staging:/ega/staging
       - ${LOCALEGA_DATA_BASE:-/impact_data/lega_data/lega}/vault:/ega/vault
-      - ${LOCALEGA_DATA_BASE:-/impact_data/lega_data/lega}/vault.bkp:/ega/vault.bkp
       - ${LOCALEGA_LOG_DIR:-/var/log/local/localega/app}/handler:/var/log/local/localega/app
     networks:
       - internal

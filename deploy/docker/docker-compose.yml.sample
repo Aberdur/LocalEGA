@@ -75,7 +75,6 @@ services:
       - ./data/inbox:/ega/inbox
       - ./data/staging:/ega/staging
       - ./data/vault:/ega/vault
-      - ./data/vault.bkp:/ega/vault.bkp
     networks:
       - internal
       - vault

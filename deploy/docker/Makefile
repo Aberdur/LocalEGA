@@ -1,5 +1,7 @@
 SHELL := /bin/bash
 
+DOCKER ?= podman
+
 LEGA_UID := $(shell id -u lega)
 LEGA_GID := $(shell id -g lega)
 # LEGA_UID := $(shell id -u)
@@ -58,6 +60,11 @@ export PGPASSWORD=$(file < pg_vault_su_password)
 export PGDATABASE=ega
 psql:
 	psql
+
+# Apply the Inbox cleanup table to an existing Vault DB. New databases load
+# it automatically from src/vault/initdb.d/35-inbox-cleanup.sql.
+apply-inbox-cleanup-migration:
+	$(DOCKER) exec -i vault-db psql -v ON_ERROR_STOP=1 -U postgres -d ega < ../../src/vault/initdb.d/35-inbox-cleanup.sql
 
 
 #############################

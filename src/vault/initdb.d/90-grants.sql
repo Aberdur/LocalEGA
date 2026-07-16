@@ -14,12 +14,15 @@ GRANT SELECT,INSERT,DELETE		ON TABLE public.dataset_file_table 	TO lega;
 
 GRANT USAGE 				ON SCHEMA private 			TO lega;
 GRANT SELECT,INSERT,UPDATE,DELETE 	ON TABLE private.file_table 		TO lega;
+GRANT USAGE                             ON SEQUENCE private.inbox_cleanup_table_id_seq TO lega;
+GRANT SELECT,INSERT,UPDATE              ON TABLE private.inbox_cleanup_table TO lega;
 GRANT USAGE                             ON SEQUENCE private.dataset_permission_table_id_seq TO lega;
 GRANT SELECT,INSERT,UPDATE,DELETE	ON TABLE private.dataset_permission_table	TO lega;
 GRANT SELECT,INSERT,UPDATE,DELETE	ON TABLE private.user_password_table		TO lega;
 
 GRANT EXECUTE ON FUNCTION public.extract_name(text) 				TO lega;
 GRANT EXECUTE ON FUNCTION public.upsert_file 					TO lega;
+GRANT EXECUTE ON FUNCTION private.record_inbox_cleanup(text, text, text, text, bigint, bigint) TO lega;
 GRANT EXECUTE ON FUNCTION public.process_dac_dataset_message(jsonb) 		TO lega;
 GRANT EXECUTE ON FUNCTION public.process_mapping_message(jsonb) 		TO lega;
 GRANT EXECUTE ON FUNCTION public.process_release_message 			TO lega;
@@ -32,4 +35,3 @@ GRANT EXECUTE ON FUNCTION public.process_user_contact_message             	TO le
 
 GRANT USAGE	ON SCHEMA crypt4gh 					TO lega;
 GRANT EXECUTE 	ON FUNCTION crypt4gh.parse_pubkey 			TO lega;
-

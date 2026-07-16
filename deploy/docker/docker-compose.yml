@@ -85,6 +85,34 @@ services:
       - vault
     command: "/etc/ega/lega.ini"
 
+  inbox-cleaner:
+    depends_on:
+      - vault-db
+    hostname: inbox-cleaner
+    image: fega/handler:latest
+    container_name: inbox-cleaner
+    group_add:
+      - "${INBOX_GID:-1000}"
+    env_file:
+      - .env
+    environment:
+      LEGA_LOG: ${LEGA_LOG:-debug}
+      LEGA_DB_CONNECTION: postgres://lega:${LEGA_DB_PASSWORD:?set LEGA_DB_PASSWORD in deploy/docker/.env}@vault-db:5432/ega?application_name=LocalEGAInboxCleaner
+      INBOX_RETENTION_DAYS: ${INBOX_RETENTION_DAYS:-90}
+      INBOX_CLEANUP_DRY_RUN: ${INBOX_CLEANUP_DRY_RUN:-true}
+      INBOX_CLEANUP_INTERVAL_HOURS: ${INBOX_CLEANUP_INTERVAL_HOURS:-24}
+      INBOX_CLEANUP_LOG_FILE: /var/log/local/localega/app/cleanup.log
+    volumes:
+      - ./lega.ini:/etc/ega/lega.ini:ro
+      - ${LOCALEGA_DATA_BASE:-/impact_data/lega_data/lega}/inbox:/ega/inbox
+      - ${LOCALEGA_DATA_BASE:-/impact_data/lega_data/lega}/vault:/ega/vault:ro
+      - ${LOCALEGA_LOG_DIR:-/var/log/local/localega/app}/inbox-cleaner:/var/log/local/localega/app
+    networks:
+      - vault
+    entrypoint: ["python"]
+    command: ["-m", "code.cleanup", "/etc/ega/lega.ini"]
+    restart: unless-stopped
+
   vault-db:
     hostname: vault
     image: localega/vault-db:latest

@@ -123,6 +123,16 @@ class DBConnection():
 
         return await self.connection.fetchval(query, *args, **kwargs)
 
+    async def record_inbox_cleanup(self, *args):
+        """Persist the source details needed by the asynchronous Inbox cleaner."""
+        if not self.connection:
+            await self.connect()
+
+        return await self.connection.fetchval(
+            'SELECT private.record_inbox_cleanup($1, $2, $3, $4, $5, $6)',
+            *args,
+        )
+
     async def fetchval(self, stmt, *args, **kwargs):
 
         query = self.conf.get(self.conf_section, stmt, raw=True)

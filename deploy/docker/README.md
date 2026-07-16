@@ -134,4 +134,31 @@ and tear all down with
 
 	docker-compose down -v
 
+## Inbox retention cleanup
+
+`inbox-cleaner` removes only Inbox files whose archival was completed by the
+handler at least `INBOX_RETENTION_DAYS` ago (90 by default). It confirms that
+the accession is still registered in Vault DB and that the corresponding Vault
+file exists before removing the Inbox source.
+
+`INBOX_CLEANUP_INTERVAL_HOURS` controls how often it runs and defaults to `24`.
+
+The cleaner starts in safe mode. Keep `INBOX_CLEANUP_DRY_RUN=true` until its
+logs show the expected candidates and the service has permission to remove a
+test Inbox file. Existing Inbox user directories must grant group write access
+to `lega`; otherwise the cleaner records the error and does not delete the
+file. Set `INBOX_CLEANUP_DRY_RUN=false` only after this check succeeds. The
+cleaner records completion timestamp, source path, size and mtime in Vault DB;
+files completed before this feature is deployed are intentionally not candidates.
+
+For an existing Vault DB, apply the migration once after `vault-db` is up:
+
+```bash
+make apply-inbox-cleanup-migration
+podman compose up -d inbox-cleaner
+```
+
+Review its output with `podman logs inbox-cleaner`. A one-off dry run is also
+available with `podman compose run --rm --no-deps inbox-cleaner --once`.
+
 Note that the `mq` component will try to create a federated queue to another RabbitMQ server. In `cega` folder, you will find the necessary components to fake Central EGA, and test your local deployment in isolation.

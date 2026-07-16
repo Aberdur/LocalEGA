@@ -53,6 +53,25 @@ async def send_completion(config, staging_path, message):
     await config.mq.cega_publish(message.parsed, 'files.completed', correlation_id=message.header.properties.content_type)
 
 
+async def record_inbox_cleanup(config, inbox_path, username, filepath, accession_id, relative_path):
+    """Record a completed archival for the asynchronous Inbox cleaner."""
+    source = Path(inbox_path)
+    try:
+        source_stat = source.stat()
+    except FileNotFoundError:
+        LOG.warning('Inbox source disappeared before cleanup could be recorded: %s', source)
+        return
+
+    await config.db.record_inbox_cleanup(
+        username,
+        filepath,
+        accession_id,
+        relative_path,
+        source_stat.st_size,
+        source_stat.st_mtime_ns,
+    )
+
+
 async def execute(config, message):
 
     data = message.parsed
@@ -62,11 +81,13 @@ async def execute(config, message):
 
     LOG.info('Processing %s: %s', username, filepath)
 
+    inbox_prefix = config.get('inbox', 'location', raw=True)
     staging_prefix = config.get('staging', 'location', raw=True)
     vault_prefix = config.get('vault', 'location')
     backup_prefix = config.get('backup', 'location', fallback=None)
     backup_enabled = bool(backup_prefix)
 
+    inbox_path = os.path.join(inbox_prefix % username, filepath.strip('/') )
     staging_path = os.path.join(staging_prefix % username, filepath.strip('/') )
     LOG.debug('Staging path: %s', staging_path)
 
@@ -86,6 +107,14 @@ async def execute(config, message):
 
     if vpath.exists(): # do nothing and return early
         LOG.info('Vault path already exists')
+        await record_inbox_cleanup(
+            config,
+            inbox_path,
+            username,
+            filepath,
+            accession_id,
+            relative_path,
+        )
         return await send_completion(config, staging_path, message)
 
     vpath.parent.mkdir(parents=True, exist_ok=True)
@@ -180,6 +209,14 @@ async def execute(config, message):
                               accession_id,
                               relative_path)
 
+    await record_inbox_cleanup(
+        config,
+        inbox_path,
+        username,
+        filepath,
+        accession_id,
+        relative_path,
+    )
+
     # All good: send completion
     return await send_completion(config, staging_path, message)
-

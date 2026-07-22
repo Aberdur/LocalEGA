@@ -58,18 +58,23 @@ async def record_inbox_cleanup(config, inbox_path, username, filepath, accession
     source = Path(inbox_path)
     try:
         source_stat = source.stat()
+        await config.db.record_inbox_cleanup(
+            username,
+            filepath,
+            accession_id,
+            relative_path,
+            source_stat.st_size,
+            source_stat.st_mtime_ns,
+        )
     except FileNotFoundError:
         LOG.warning('Inbox source disappeared before cleanup could be recorded: %s', source)
-        return
-
-    await config.db.record_inbox_cleanup(
-        username,
-        filepath,
-        accession_id,
-        relative_path,
-        source_stat.st_size,
-        source_stat.st_mtime_ns,
-    )
+    except Exception:
+        # Cleanup is best-effort: archival completion must not fail merely
+        # because the optional retention receipt could not be persisted.
+        LOG.exception(
+            'Could not record Inbox cleanup receipt for %s; source retained',
+            accession_id,
+        )
 
 
 async def execute(config, message):

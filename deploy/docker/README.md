@@ -142,6 +142,8 @@ the accession is still registered in Vault DB and that the corresponding Vault
 file exists before removing the Inbox source.
 
 `INBOX_CLEANUP_INTERVAL_HOURS` controls how often it runs and defaults to `24`.
+`INBOX_CLEANUP_BATCH_SIZE` limits each cycle to `1000` candidates by default,
+preventing an accumulated backlog from causing an unbounded cleanup run.
 
 The cleaner starts in safe mode. Keep `INBOX_CLEANUP_DRY_RUN=true` until its
 logs show the expected candidates and the service has permission to remove a
@@ -150,6 +152,9 @@ to `lega`; otherwise the cleaner records the error and does not delete the
 file. Set `INBOX_CLEANUP_DRY_RUN=false` only after this check succeeds. The
 cleaner records completion timestamp, source path, size and mtime in Vault DB;
 files completed before this feature is deployed are intentionally not candidates.
+Invalid boolean values are rejected, so a typo cannot accidentally disable dry-run
+mode. Symlinks are never followed, and the registered Vault payload size is checked
+before an Inbox file is removed.
 
 For an existing Vault DB, apply the migration once after `vault-db` is up:
 

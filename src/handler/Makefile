@@ -4,9 +4,12 @@ ARGS =
 
 IMG=fega/handler:$(COMMIT)
 
-.PHONY: latest build
+.PHONY: latest build test
 
 all: latest
+
+test:
+	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. python3 -m unittest discover -s tests -v
 
 ARCH=$(shell uname -m)
 ifeq ($(ARCH), arm64) # reset for MacOS

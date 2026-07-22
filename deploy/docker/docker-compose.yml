@@ -101,6 +101,7 @@ services:
       INBOX_RETENTION_DAYS: ${INBOX_RETENTION_DAYS:-90}
       INBOX_CLEANUP_DRY_RUN: ${INBOX_CLEANUP_DRY_RUN:-true}
       INBOX_CLEANUP_INTERVAL_HOURS: ${INBOX_CLEANUP_INTERVAL_HOURS:-24}
+      INBOX_CLEANUP_BATCH_SIZE: ${INBOX_CLEANUP_BATCH_SIZE:-1000}
       INBOX_CLEANUP_LOG_FILE: /var/log/local/localega/app/cleanup.log
     volumes:
       - ./lega.ini:/etc/ega/lega.ini:ro

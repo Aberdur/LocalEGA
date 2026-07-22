@@ -208,7 +208,12 @@ async def main(conf_file, once):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('conf_file', help='LocalEGA handler configuration file')
+    parser.add_argument(
+        'conf_file',
+        nargs='?',
+        default='/etc/ega/lega.ini',
+        help='LocalEGA handler configuration file (default: /etc/ega/lega.ini)',
+    )
     parser.add_argument('--once', action='store_true', help='run one cleanup cycle and exit')
     args = parser.parse_args()
     try:

@@ -110,8 +110,8 @@ services:
       - ${LOCALEGA_LOG_DIR:-/var/log/local/localega/app}/inbox-cleaner:/var/log/local/localega/app
     networks:
       - vault
-    entrypoint: ["python"]
-    command: ["-m", "code.cleanup", "/etc/ega/lega.ini"]
+    entrypoint: ["python", "-m", "code.cleanup"]
+    command: ["/etc/ega/lega.ini"]
     restart: unless-stopped
 
   vault-db:

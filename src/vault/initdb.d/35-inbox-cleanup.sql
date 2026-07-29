@@ -45,7 +45,16 @@ AS $_$
         _inbox_filesize,
         _inbox_mtime_ns
     )
-    ON CONFLICT (username, filepath, accession_id, inbox_mtime_ns) DO NOTHING;
+    ON CONFLICT (username, filepath, accession_id, inbox_mtime_ns)
+    DO UPDATE SET
+        vault_relative_path = EXCLUDED.vault_relative_path,
+        inbox_filesize = EXCLUDED.inbox_filesize,
+        completed_at = now(),
+        deleted_at = NULL,
+        delete_error = NULL
+    -- Handler retries must not extend the original retention period. Reopen
+    -- only a receipt that was already completed by a previous cleanup.
+    WHERE private.inbox_cleanup_table.deleted_at IS NOT NULL;
 $_$;
 
 -- Keep migration self-contained for already initialised Vault databases.

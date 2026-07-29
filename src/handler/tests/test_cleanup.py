@@ -117,6 +117,49 @@ class CleanupRunTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(summary['skipped'], 1)
         self.assertEqual(config.db.connection.executed, [])
 
+    async def test_dry_run_does_not_mark_an_absent_file(self):
+        source_path = self.user_root / 'sample.c4gh'
+        vault_path = self.vault_root / 'EGAF000000001'
+        source_path.write_bytes(b'inbox payload')
+        vault_path.write_bytes(b'vault payload')
+        row = self.make_row(source_path, vault_path)
+        source_path.unlink()
+        config = FakeConfig(self.inbox_root, self.vault_root, [row])
+
+        summary = await cleanup.run_once(config, 90, True)
+
+        self.assertEqual(summary['skipped'], 1)
+        self.assertEqual(config.db.connection.executed, [])
+
+    async def test_dry_run_does_not_record_validation_errors(self):
+        source_path = self.user_root / 'sample.c4gh'
+        vault_path = self.vault_root / 'EGAF000000001'
+        source_path.write_bytes(b'inbox payload')
+        vault_path.write_bytes(b'vault payload')
+        row = self.make_row(source_path, vault_path)
+        row['registered_vault_filesize'] += 1
+        config = FakeConfig(self.inbox_root, self.vault_root, [row])
+
+        summary = await cleanup.run_once(config, 90, True)
+
+        self.assertTrue(source_path.exists())
+        self.assertEqual(summary['errors'], 1)
+        self.assertEqual(config.db.connection.executed, [])
+
+    async def test_non_dry_run_marks_an_absent_file(self):
+        source_path = self.user_root / 'sample.c4gh'
+        vault_path = self.vault_root / 'EGAF000000001'
+        source_path.write_bytes(b'inbox payload')
+        vault_path.write_bytes(b'vault payload')
+        row = self.make_row(source_path, vault_path)
+        source_path.unlink()
+        config = FakeConfig(self.inbox_root, self.vault_root, [row])
+
+        summary = await cleanup.run_once(config, 90, False)
+
+        self.assertEqual(summary['skipped'], 1)
+        self.assertEqual(config.db.connection.executed[0][1], (7,))
+
     async def test_rejects_symlink_without_deleting_target(self):
         target_path = self.user_root / 'other.c4gh'
         source_path = self.user_root / 'sample.c4gh'

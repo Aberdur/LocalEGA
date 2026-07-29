@@ -162,8 +162,22 @@ async def run_once(config, retention_days, dry_run, batch_size=1000):
                     inbox_path,
                 )
             except FileNotFoundError:
-                LOG.info('Skipping already absent Inbox file for %s: %s', row['accession_id'], inbox_path)
-                await connection.connection.execute(MARK_DELETED_QUERY, row['id'])
+                if dry_run:
+                    LOG.info(
+                        'DRY RUN: Inbox file is already absent for %s: %s',
+                        row['accession_id'],
+                        inbox_path,
+                    )
+                else:
+                    LOG.info(
+                        'Marking already absent Inbox file for %s: %s',
+                        row['accession_id'],
+                        inbox_path,
+                    )
+                    await connection.connection.execute(
+                        MARK_DELETED_QUERY,
+                        row['id'],
+                    )
                 summary['skipped'] += 1
                 continue
 
@@ -182,7 +196,12 @@ async def run_once(config, retention_days, dry_run, batch_size=1000):
             summary['deleted'] += 1
         except Exception as error:
             LOG.error('Could not clean Inbox record %s: %s', row['id'], error)
-            await connection.connection.execute(MARK_ERROR_QUERY, row['id'], str(error))
+            if not dry_run:
+                await connection.connection.execute(
+                    MARK_ERROR_QUERY,
+                    row['id'],
+                    str(error),
+                )
             summary['errors'] += 1
 
     LOG.info('Inbox cleanup summary: %s', summary)

@@ -149,8 +149,10 @@ The cleaner starts in safe mode. Keep `INBOX_CLEANUP_DRY_RUN=true` until its
 logs show the expected candidates and the service has permission to remove a
 test Inbox file. Existing Inbox user directories must grant group write access
 to `lega`; otherwise the cleaner records the error and does not delete the
-file. Set `INBOX_CLEANUP_DRY_RUN=false` only after this check succeeds. The
-cleaner records completion timestamp, source path, size and mtime in Vault DB;
+file. Dry-run mode is read-only: it changes neither Inbox files nor cleanup
+records in Vault DB. Set `INBOX_CLEANUP_DRY_RUN=false` only after this check
+succeeds. The cleaner records completion timestamp, source path, size and mtime
+in Vault DB;
 files completed before this feature is deployed are intentionally not candidates.
 Invalid boolean values are rejected, so a typo cannot accidentally disable dry-run
 mode. Symlinks are never followed, and the registered Vault payload size is checked

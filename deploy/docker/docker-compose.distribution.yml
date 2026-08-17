@@ -11,7 +11,7 @@ services:
       - vault
     environment:
       FUSE_DB_DSN: postgresql://distribution:${DISTRIBUTION_DB_PASSWORD:?set DISTRIBUTION_DB_PASSWORD in deploy/docker/.env}@vault-db:5432/ega?application_name=EGADistFS
-      EGA_SSH_BANNER: ${EGA_SSH_BANNER:-Affiliated EGA ciber-isciii}
+      EGA_SSH_BANNER: ${EGA_SSH_BANNER:-Affiliated EGA}
     volumes:
       - ${LOCALEGA_DATA_BASE:-/impact_data/lega_data/lega}/vault:/opt/LocalEGA/vault:ro
       - ${LOCALEGA_BIND_BASE:-/srv/containers/bind/localega}/etc:/opt/LocalEGA/etc

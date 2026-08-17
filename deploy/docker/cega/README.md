@@ -1,28 +1,9 @@
-# Fake Central EGA
+# Fake Central EGA fixtures
 
-We use 2 stubbing services in order to fake the necessary Central EGA components (mostly for local tests or github Actions).
+This directory contains development-only fixtures for emulating Central EGA.
+They are not part of the production Compose deployment documented in
+`deploy/docker`.
 
-| Container        | Role |
-|-----------------:|------|
-| `cega`           | Sets up a small list of test users, and consumes messages from the broker |
-| `cega-mq`        | Sets up a RabbitMQ message broker with appropriate accounts, exchanges, queues and bindings |
-
-
-We include 2 dummy users: `jane` and `john`.
-> Their password and their ssh-key passphrase are their username.
-
-You can start the Central EGA (fake) component with:
-
-	# Start the Central EGA broker
-	docker-compose up -d cega-mq
-
-    # and after a few seconds, start the Central all-in-one service
-	docker-compose up -d cega
-
-The Central EGA services are at (and you can update `docker-compose.yml` accordingly)
-
-| Service        | URL | Credentials | Example |
-|---------------:|-----|-------------|---------|
-| NSS            | `http://cega:8080` | `fega:testing` | `curl -u fega:testing http://localhost:8080/username/john` |
-| RabbitMQ       | `amqp://cega-mq:5672/%2F` | `admin:secret` | `CEGA_CONNECTION=amqp://admin:secret@cega-mq:5672/%2F` |
-
+The fixture credentials and data must never be used in a production
+environment. A separate, explicit test harness is required to run these
+components.

@@ -154,10 +154,10 @@ En este modo:
 Desde `deploy/docker`:
 
 ```bash
-cp docker-compose.yml.sample docker-compose.yml
+cp .env.example .env
 cp ../../src/vault/pg.conf.sample pg.conf
 cp ../../src/vault/pg_hba.conf.sample pg_hba.conf
-cp ../../src/handler/conf.ini.sample lega.ini
+cp lega.ini.sample lega.ini
 ```
 
 Genera claves:

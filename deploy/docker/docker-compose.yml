@@ -20,11 +20,7 @@ services:
       MQ_CONNECTION: amqp://${MQ_USER:?set MQ_USER in deploy/docker/.env}:${MQ_PASSWORD:?set MQ_PASSWORD in deploy/docker/.env}@mq:5672/%2F
       MQ_EXCHANGE: ${MQ_EXCHANGE:-cega}
       MQ_ROUTING_KEY: ${MQ_ROUTING_KEY:-files.inbox}
-      MQ_VERIFY_PEER: ${MQ_VERIFY_PEER:-no}
-      MQ_VERIFY_HOSTNAME: ${MQ_VERIFY_HOSTNAME:-no}
-      AUTH_VERIFY_PEER: ${AUTH_VERIFY_PEER:-no}
-      AUTH_VERIFY_HOSTNAME: ${AUTH_VERIFY_HOSTNAME:-no}
-      EGA_SSH_BANNER: ${EGA_SSH_BANNER:-Affiliated EGA ciber-isciii}
+      EGA_SSH_BANNER: ${EGA_SSH_BANNER:-Affiliated EGA}
     ports:
       - "${INBOX_PORT:-8086}:9000"
     image: crg/fega-inbox:latest
@@ -135,35 +131,3 @@ services:
     ports:
       - "${VAULT_DB_PORT:-5432}:5432"
     entrypoint: ['postgres', '-c', 'config_file=/etc/ega/pg.conf']
-
-  cega-mq:
-    hostname: cega-mq
-    ports:
-      - "${CEGA_MQ_MANAGEMENT_PORT:-15670}:15672"
-    image: rabbitmq:3.11.10-management-alpine
-    container_name: cega-mq
-    networks:
-      - internal
-    volumes:
-      - ./cega/mq/definitions.json:/etc/rabbitmq/definitions.json:ro
-      - ./cega/mq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
-      - ${LOCALEGA_LOG_DIR:-/var/log/local/localega/app}/cega-mq:/var/log/local/localega/app
-
-  cega:
-    depends_on:
-      - cega-mq
-    hostname: cega
-    ports:
-      - "${CEGA_PORT:-8080}:8080"
-    image: cega
-    build: ./cega
-    container_name: cega
-    networks:
-      - internal
-    environment:
-      EGAF_COUNTER_START: ${EGAF_COUNTER_START:-0}
-    volumes:
-      - ./cega/users/users.json:/ega/users.json:ro
-      - ${LOCALEGA_LOG_DIR:-/var/log/local/localega/app}/cega:/var/log/local/localega/app
-    entrypoint: ['python', '-m', 'server']
-    command: '-d -f 1 amqp://${CEGA_MQ_USER:?set CEGA_MQ_USER in deploy/docker/.env}:${CEGA_MQ_PASSWORD:?set CEGA_MQ_PASSWORD in deploy/docker/.env}@cega-mq:5672/%2F'

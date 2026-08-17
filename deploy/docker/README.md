@@ -10,13 +10,12 @@ It requires:
 * a master key
 * a deployment environment file: `.env`
 * a configuration file for the python handler: `lega.ini`
-* a configuration file for docker-compose: `docker-compose.yml`
+* a production configuration file for Compose: `docker-compose.yml`
 * 2 configurations file for postgres: `pg.conf` and `pg_hba.conf`
 
-We assume you have created a local user and a group named `lega`. If not, you can do it with
-
-    groupadd -r lega
-    useradd -M -g lega lega
+Run every Podman command as the same rootless service account. `LEGA_UID` and
+`LEGA_GID` configure the `lega` account inside the images and do not need to
+match the service account IDs on the host.
 
 # Sensitive data
 
@@ -29,9 +28,9 @@ Update `.env` with the deployment-specific values. `docker-compose.yml` reads it
 	cp lega.ini.sample                     lega.ini
 
 
-The included message broker uses an administrator account with
-`admin:secret` as `username:password`. This is up to you to update it
-in your production environment.
+Set a dedicated `MQ_USER`, `MQ_PASSWORD` and matching `MQ_PASSWORD_HASH` in
+`.env`. Do not use the credentials from the Fake CEGA test fixtures for the
+production broker.
 
 Generate the service key with:
 
@@ -167,5 +166,3 @@ podman compose up -d inbox-cleaner
 
 Review its output with `podman logs inbox-cleaner`. A one-off dry run is also
 available with `podman compose run --rm --no-deps inbox-cleaner --once`.
-
-Note that the `mq` component will try to create a federated queue to another RabbitMQ server. In `cega` folder, you will find the necessary components to fake Central EGA, and test your local deployment in isolation.

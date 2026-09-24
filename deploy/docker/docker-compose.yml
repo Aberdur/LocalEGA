@@ -5,15 +5,12 @@ networks:
   internal:
   vault:
 
-volumes:
-  mq-data: {}
-
 services:
   inbox:
     hostname: inbox
     depends_on:
       - mq
-    container_name: ${CONTAINER_PREFIX:-}inbox
+    container_name: inbox
     networks:
       - external
       - internal
@@ -26,11 +23,8 @@ services:
       EGA_SSH_BANNER: ${EGA_SSH_BANNER:-Affiliated EGA}
     ports:
       - "${INBOX_PORT:-8086}:9000"
-    image: crg/fega-inbox:${IMAGE_TAG:-latest}
-    build:
-      context: ../../src/inbox
-      args:
-        LEGA_GID: ${LEGA_GID:-1000}
+    image: crg/fega-inbox:latest
+    build: ../../src/inbox
     volumes:
       - ${LOCALEGA_DATA_BASE:-/impact_data/lega_data/lega}/inbox:/ega/inbox
       - ${LOCALEGA_LOG_DIR:-/var/log/local/localega/app}/inbox:/var/log/local/localega/app
@@ -46,11 +40,10 @@ services:
     ports:
       - "${MQ_MANAGEMENT_PORT:-15672}:15672"
     image: rabbitmq:3.11.10-management-alpine
-    container_name: ${CONTAINER_PREFIX:-}mq
+    container_name: mq
     networks:
       - internal
     volumes:
-      - mq-data:/var/lib/rabbitmq
       - ../../src/mq/entrypoint.sh:/usr/local/bin/ega-entrypoint.sh:ro
       - ${LOCALEGA_LOG_DIR:-/var/log/local/localega/app}/mq:/var/log/local/localega/app
     entrypoint: ['/usr/local/bin/ega-entrypoint.sh']
@@ -60,13 +53,13 @@ services:
     depends_on:
       - mq
     hostname: handler
-    image: fega/handler:${IMAGE_TAG:-latest}
+    image: fega/handler:latest
     build:
       context: ../../src/handler
       args:
         LEGA_UID: ${LEGA_UID:-1000}
         LEGA_GID: ${LEGA_GID:-1000}
-    container_name: ${CONTAINER_PREFIX:-}handler
+    container_name: handler
     group_add:
       - "${INBOX_GID:-1000}"
     env_file:
@@ -92,8 +85,8 @@ services:
     depends_on:
       - vault-db
     hostname: inbox-cleaner
-    image: fega/handler:${IMAGE_TAG:-latest}
-    container_name: ${CONTAINER_PREFIX:-}inbox-cleaner
+    image: fega/handler:latest
+    container_name: inbox-cleaner
     group_add:
       - "${INBOX_GID:-1000}"
     env_file:
@@ -119,9 +112,9 @@ services:
 
   vault-db:
     hostname: vault
-    image: localega/vault-db:${IMAGE_TAG:-latest}
+    image: localega/vault-db:latest
     build: ../../src/vault
-    container_name: ${CONTAINER_PREFIX:-}vault-db
+    container_name: vault-db
     environment:
       PGDATA: /ega/data
     volumes:

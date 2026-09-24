@@ -1,6 +1,0 @@
-# Reuse the RabbitMQ volume from a previous deployment during a cutover.
-# Set LOCALEGA_MQ_VOLUME to the existing Podman volume name before invoking Compose.
-volumes:
-  mq-data:
-    external: true
-    name: ${LOCALEGA_MQ_VOLUME:?set LOCALEGA_MQ_VOLUME to the existing RabbitMQ volume name}

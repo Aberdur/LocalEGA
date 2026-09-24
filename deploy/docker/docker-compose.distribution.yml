@@ -3,8 +3,8 @@ services:
     build:
       context: ../..
       dockerfile: deploy/docker/distribution/Dockerfile
-    image: localega/distribution:${IMAGE_TAG:-latest}
-    container_name: ${CONTAINER_PREFIX:-}distribution
+    image: localega/distribution:latest
+    container_name: distribution
     ports:
       - "${DISTRIBUTION_PORT:-2224}:2223"
     networks:
@@ -12,7 +12,6 @@ services:
     environment:
       FUSE_DB_DSN: postgresql://distribution:${DISTRIBUTION_DB_PASSWORD:?set DISTRIBUTION_DB_PASSWORD in deploy/docker/.env}@vault-db:5432/ega?application_name=EGADistFS
       EGA_SSH_BANNER: ${EGA_SSH_BANNER:-Affiliated EGA}
-      EGA_PRECREATE_HOMES: ${EGA_PRECREATE_HOMES:-0}
     volumes:
       - ${LOCALEGA_DATA_BASE:-/impact_data/lega_data/lega}/vault:/opt/LocalEGA/vault:ro
       - ${LOCALEGA_BIND_BASE:-/srv/containers/bind/localega}/etc:/opt/LocalEGA/etc
@@ -29,7 +28,7 @@ services:
 
   nss-sync:
     image: ubuntu:22.04
-    container_name: ${CONTAINER_PREFIX:-}nss-sync
+    container_name: nss-sync
     environment:
       SYNC_INTERVAL_SECONDS: ${SYNC_INTERVAL_SECONDS:-60}
     volumes:

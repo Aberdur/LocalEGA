@@ -9,7 +9,7 @@ La guía separa expresamente:
 - los identificadores internos de los contenedores;
 - los UID/GID subordinados que Podman representa en el host.
 
-No asume una instalación previa ni datos existentes. Para sustituir los contenedores de la VM conservando la base, Vault y claves actuales, seguir [el procedimiento de sustitución](docs/redeploy_existing_vm.md). Las demás operaciones de actualización, migración y recuperación deben documentarse y ejecutarse por separado.
+No asume una instalación previa ni datos existentes. Las operaciones de actualización, migración y recuperación deben documentarse y ejecutarse por separado.
 
 ## Índice
 
@@ -102,7 +102,7 @@ En la VM:
 - cliente PostgreSQL para comprobaciones administrativas;
 - herramientas SELinux (`semanage` y `restorecon`) si SELinux está activo.
 
-El módulo Python `crypt4gh` se necesita en el entorno que extrae el secreto master de `master.key` (en los comandos de esta guía, la VM). Las herramientas para cifrar ficheros pueden ejecutarse fuera de la VM.
+`crypt4gh` se necesita en el entorno donde se generan o inspeccionan las claves Crypt4GH. En este contexto donde se produzca la encriptaciÓn de los ficheros. Fuera del enterno de la VM.
 
 Comprobaciones iniciales:
 
@@ -191,8 +191,7 @@ Esta traducción es especialmente importante en una implementación en un servid
 
 ## Rutas persistentes
 
-Rutas recomendadas para una instalación definitiva. Para ensayar en una VM
-que ya contiene LocalEGA, utilizar el conjunto aislado indicado debajo:
+Rutas recomendadas:
 
 ```bash
 REPO_BASE=/opt/containers_apps/localega
@@ -202,36 +201,6 @@ LOCALEGA_BIND_BASE=/srv/containers/bind/localega
 LOCALEGA_RUNTIME_BASE=/srv/containers/bind/localega/runtime
 LOCALEGA_LOG_DIR=/var/log/local/localega/app
 ```
-
-### Ensayo limpio junto a una instalación existente
-
-Para comprobar esta guía en `dcontainers00` sin tocar sus datos, utilizar un
-checkout y subdirectorios exclusivos. El árbol definitivo, las claves y la
-base actual permanecen intactos:
-
-```bash
-export REPO_BASE=/opt/containers_apps/localega
-export REPO_DIR=/opt/containers_apps/localega/LocalEGA-cleancheck
-LOCALEGA_DATA_BASE=/impact_data/lega_data/lega/cleancheck
-LOCALEGA_BIND_BASE=/srv/containers/bind/localega/cleancheck
-LOCALEGA_RUNTIME_BASE=/srv/containers/bind/localega/cleancheck/runtime
-LOCALEGA_LOG_DIR=/var/log/local/localega/app/cleancheck
-```
-
-Al crear `.env` desde `.env.example`, usar esas cuatro rutas y añadir:
-
-```env
-COMPOSE_PROJECT_NAME=localega-cleancheck
-CONTAINER_PREFIX=cleancheck-
-IMAGE_TAG=cleancheck
-DISTRIBUTION_PORT=8087
-```
-
-Los puertos pueden conservar los de la VM mientras los contenedores antiguos
-estén detenidos. El proyecto, los nombres de contenedor, las imágenes y el
-volumen nombrado de RabbitMQ quedan separados de los anteriores. Generar
-claves nuevas y crear una base nueva solo dentro de `cleancheck`. No copiar
-`.env`, claves ni archivos de PostgreSQL desde `LocalEGA` o `TEST`.
 
 ### NFS: datos de gran tamaño
 
@@ -265,19 +234,19 @@ No se crea `vault.bkp` en esta guía. El Vault debe protegerse mediante la polí
 Como administrador:
 
 ```bash
-sudo mkdir -p "${REPO_BASE:-/opt/containers_apps/localega}"
-mkdir -p "${LOCALEGA_DATA_BASE:-/impact_data/lega_data/lega}"
-sudo mkdir -p "${LOCALEGA_RUNTIME_BASE:-/srv/containers/bind/localega/runtime}"
-sudo mkdir -p "${LOCALEGA_LOG_DIR:-/var/log/local/localega/app}"
+sudo mkdir -p /opt/containers_apps/localega
+sudo mkdir -p /impact_data/lega_data/lega
+sudo mkdir -p /srv/containers/bind/localega/runtime
+sudo mkdir -p /var/log/local/localega/app
 
-sudo chown <USUARIO_PODMAN>:<GRUPO_PODMAN> \
-  "${REPO_BASE:-/opt/containers_apps/localega}"
-sudo chown -R <USUARIO_PODMAN>:<GRUPO_PODMAN> \
-  "${LOCALEGA_BIND_BASE:-/srv/containers/bind/localega}" \
-  "${LOCALEGA_LOG_DIR:-/var/log/local/localega/app}"
+sudo chown -R \
+  <USUARIO_PODMAN>:<GRUPO_PODMAN> \
+  /opt/containers_apps/localega \
+  /srv/containers/bind/localega \
+  /var/log/local/localega
 ```
 
-Si el usuario rootless no puede crear el directorio del NFS, solicitarlo al administrador del almacenamiento. La propiedad definitiva de sus subdirectorios se configura más adelante según los IDs internos de cada contenedor. No hacer `chown -R` sobre datos de una instalación existente.
+La propiedad definitiva de los subdirectorios del NFS se configura más adelante según los IDs internos de cada contenedor. No se debe hacer un `chown -R` indiscriminado de un NFS que ya contenga datos.
 
 ### SELinux en disco local
 
@@ -308,13 +277,11 @@ Configurar el montaje NFS de forma persistente antes de arrancar LocalEGA.
 ## Obtener el código
 
 ```bash
-REPO_BASE=${REPO_BASE:-/opt/containers_apps/localega}
-REPO_DIR=${REPO_DIR:-$REPO_BASE/LocalEGA}
-cd "$REPO_BASE"
+cd /opt/containers_apps/localega
 git clone --recurse-submodules \
   <URL_REPOSITORIO_LOCALEGA> \
-  "$(basename "$REPO_DIR")"
-cd "$REPO_DIR"
+  LocalEGA
+cd LocalEGA
 ```
 
 Seleccionar exclusivamente una rama o tag aprobada:
@@ -342,7 +309,7 @@ Las claves tienen funciones distintas:
 Desde `deploy/docker`:
 
 ```bash
-cd "${REPO_DIR:-/opt/containers_apps/localega/LocalEGA}/deploy/docker"
+cd /opt/containers_apps/localega/LocalEGA/deploy/docker
 
 ssh-keygen \
   -t ed25519 \
@@ -363,104 +330,49 @@ El handler monta:
 - `master.key.pub`;
 - su configuración de aplicación.
 
-El secreto master requerido por Vault DB se obtiene de la clave privada
-master después de crear `pg.conf`. No imprimirlo en la terminal.
+El secreto master requerido por Vault DB se obtiene de la clave privada master. Para evitar que la passphrase quede escrita en el historial:
+
+```bash
+python3 - <<'PY'
+from getpass import getpass
+import crypt4gh.keys
+
+passphrase = getpass("Master key passphrase: ")
+key = crypt4gh.keys.get_private_key(
+    "master.key",
+    lambda: passphrase,
+)
+print(key.hex())
+PY
+```
+
+El valor debe configurarse en `pg.conf` como `crypt4gh.master_seckey`. No mostrarlo en logs ni guardarlo en archivos temporales sin protección.
 
 ## Configurar el despliegue
 
 ```bash
-cd "${REPO_DIR:-/opt/containers_apps/localega/LocalEGA}/deploy/docker"
+cd /opt/containers_apps/localega/LocalEGA/deploy/docker
 cp .env.example .env
 cp ../../src/vault/pg.conf.sample pg.conf
 cp ../../src/vault/pg_hba.conf.sample pg_hba.conf
 cp lega.ini.sample lega.ini
-chmod 600 .env pg.conf pg_hba.conf
-chmod 644 lega.ini
-```
-
-Comprobar que el módulo Python está disponible y escribir el secreto master
-directamente en `pg.conf`. El script también fija `vault.dirpath` a la ruta
-que monta Distribution. La passphrase se solicita de forma interactiva y no
-aparece en el historial ni en la salida:
-
-```bash
-python3 -c 'import crypt4gh.keys'
-python3 - <<'PY'
-from getpass import getpass
-from pathlib import Path
-import os
-import re
-import tempfile
-import crypt4gh.keys
-
-path = Path("pg.conf")
-config = path.read_text()
-key = crypt4gh.keys.get_private_key(
-    "master.key", lambda: getpass("Master key passphrase: ")
-)
-if len(key) != 32:
-    raise SystemExit("La clave master debe tener 32 bytes")
-config, count_key = re.subn(
-    r"(?m)^crypt4gh\.master_seckey\s*=.*$",
-    "crypt4gh.master_seckey = '" + key.hex() + "'",
-    config,
-)
-config, count_vault = re.subn(
-    r"(?m)^vault\.dirpath\s*=.*$",
-    "vault.dirpath = '/opt/LocalEGA/vault'",
-    config,
-)
-if (count_key, count_vault) != (1, 1):
-    raise SystemExit("pg.conf no contiene exactamente una línea para cada ajuste")
-fd, tmp = tempfile.mkstemp(prefix=".pg.conf.", dir=".")
-try:
-    os.fchmod(fd, 0o600)
-    with os.fdopen(fd, "w") as stream:
-        stream.write(config)
-    os.replace(tmp, path)
-finally:
-    if os.path.exists(tmp):
-        os.unlink(tmp)
-print("pg.conf actualizado sin mostrar el secreto")
-PY
 ```
 
 El despliegue centraliza en `.env` las variables soportadas por Compose y los entrypoints.
 
-Al combinar varios YAML, algunas versiones de `podman-compose` imprimen por
-stderr toda la configuración interpolada, incluidas credenciales. Definir una
-función que guarde ese diagnóstico de forma privada y lo elimine si el comando
-termina bien:
+Antes de continuar, comprobar qué ficheros espera la versión aprobada:
 
 ```bash
-localega_compose() {
-  local diagnostic rc
-  diagnostic=$(mktemp /tmp/localega-compose.XXXXXX) || return 1
-  chmod 600 "$diagnostic"
-  if podman compose \
-    -f docker-compose.yml \
-    -f docker-compose.distribution.yml \
-    "$@" 2>"$diagnostic"; then
-    rm -f "$diagnostic"
-  else
-    rc=$?
-    printf 'Compose falló (%s); diagnóstico privado: %s\n' "$rc" "$diagnostic" >&2
-    return "$rc"
-  fi
-}
-
-localega_compose config >/dev/null
+podman compose \
+  -f docker-compose.yml \
+  -f docker-compose.distribution.yml \
+  config >/tmp/localega-compose.yml
 ```
-
-Volver a definir la función al iniciar otra sesión. Si un comando falla,
-revisar el diagnóstico solo en la VM y borrarlo después.
 
 ### Variables locales
 
 ```env
 APP_NAME=localega
-CONTAINER_PREFIX=
-IMAGE_TAG=latest
 
 LOCALEGA_DATA_BASE=/impact_data/lega_data/lega
 LOCALEGA_BIND_BASE=/srv/containers/bind/localega
@@ -479,11 +391,8 @@ INBOX_GID=1003
 SYNC_INTERVAL_SECONDS=60
 EGA_PRECREATE_HOMES=0
 LEGA_LOG=info
-EGA_SSH_BANNER="Affiliated EGA <nombre-afiliado>"
+EGA_SSH_BANNER=Affiliated EGA <nombre-afiliado>
 ```
-
-Los puertos publicados se eligen según el firewall de cada host. En la VM de referencia,
-`DISTRIBUTION_PORT=8087`; el puerto interno de Distribution sigue siendo `2223`.
 
 Usar `LEGA_LOG=debug` únicamente durante validaciones o troubleshooting controlado.
 
@@ -564,9 +473,6 @@ Compose construye internamente `LEGA_DB_CONNECTION` y `FUSE_DB_DSN` a partir de 
 Editar `pg.conf` y `pg_hba.conf` según la política de red. `pg_hba.conf` debe limitar los orígenes a las redes y roles estrictamente necesarios.
 
 Incluir en `pg.conf` el valor de `crypt4gh.master_seckey` generado anteriormente.
-Configurar `vault.dirpath = '/opt/LocalEGA/vault'`: esta ruta se guarda con cada
-accession y debe coincidir con el montaje de Vault dentro de `distribution`.
-No usar la ruta del NFS tal como aparece en el host.
 
 
 ### Validar la configuración
@@ -574,44 +480,30 @@ No usar la ruta del NFS tal como aparece en el host.
 Sin mostrar secretos:
 
 ```bash
-localega_compose config >/dev/null
+podman compose \
+  -f docker-compose.yml \
+  -f docker-compose.distribution.yml \
+  config >/tmp/localega-compose-resolved.yml
 
 echo 'Compose configuration: OK'
 ```
 
-Proteger los ficheros sensibles conservando el acceso del usuario `postgres`
-dentro del contenedor. En el host rootless, `0:999` mantiene como propietario
-al operador y asigna el grupo interno de PostgreSQL:
+Proteger los ficheros sensibles:
 
 ```bash
-chmod 600 .env service.key master.key
-podman unshare chown 0:999 pg.conf pg_hba.conf
-podman unshare chmod 640 pg.conf pg_hba.conf
+chmod 600 .env pg.conf pg_hba.conf service.key master.key
 chmod 644 service.key.pub master.key.pub
 ```
 
-No poner `pg.conf` en modo `600` con propietario interno `0`: el proceso
-`vault-db`, que se ejecuta como `999:999`, no podría leerlo.
-
 ## Preparar permisos
 
-Cargar únicamente las variables de rutas e IDs necesarias en esta sesión. Leer
-`.env` como datos evita ejecutar su contenido como código de shell:
+Cargar la configuración sin imprimirla:
 
 ```bash
-cd "${REPO_DIR:-/opt/containers_apps/localega/LocalEGA}/deploy/docker"
-while IFS='=' read -r name value; do
-  case "$name" in
-    LOCALEGA_DATA_BASE|LOCALEGA_BIND_BASE|LOCALEGA_RUNTIME_BASE|LOCALEGA_LOG_DIR|LEGA_UID|LEGA_GID|INBOX_GID|IMAGE_TAG|CONTAINER_PREFIX|COMPOSE_PROJECT_NAME)
-      export "$name=$value"
-      ;;
-  esac
-done < .env
-
-: "${LOCALEGA_DATA_BASE:?falta LOCALEGA_DATA_BASE}"
-: "${LOCALEGA_BIND_BASE:?falta LOCALEGA_BIND_BASE}"
-: "${LOCALEGA_RUNTIME_BASE:?falta LOCALEGA_RUNTIME_BASE}"
-: "${LOCALEGA_LOG_DIR:?falta LOCALEGA_LOG_DIR}"
+cd /opt/containers_apps/localega/LocalEGA/deploy/docker
+set -a
+source .env
+set +a
 ```
 
 Crear la estructura:
@@ -696,8 +588,8 @@ El Inbox requiere un tratamiento adicional:
 Después de que `inbox` pueda resolver los usuarios CEGA, obtener sus IDs con:
 
 ```bash
-podman exec "${CONTAINER_PREFIX:-}inbox" getent passwd '<USUARIO_EGA>'
-podman exec "${CONTAINER_PREFIX:-}inbox" id '<USUARIO_EGA>'
+podman exec inbox getent passwd '<USUARIO_EGA>'
+podman exec inbox id '<USUARIO_EGA>'
 ```
 
 Aplicar los propietarios traducidos al host mediante `podman unshare` o desde una cuenta con permisos administrativos sobre el NFS. Para cada home:
@@ -712,14 +604,6 @@ claves      = 600
 ```
 
 ### Permisos de configuración local
-
-La clave privada de servicio se genera con el usuario del host, pero debe
-pertenecer al UID/GID interno del handler antes de arrancarlo:
-
-```bash
-podman unshare chown "${LEGA_UID}:${LEGA_GID}" service.key
-podman unshare chmod 600 service.key
-```
 
 ```bash
 podman unshare chown -R \
@@ -745,15 +629,23 @@ Los logs deben ser escribibles por el usuario del servicio correspondiente. Veri
 ## Construir las imágenes
 
 ```bash
-cd "${REPO_DIR:-/opt/containers_apps/localega/LocalEGA}/deploy/docker"
+cd /opt/containers_apps/localega/LocalEGA/deploy/docker
 
-localega_compose build
+make images \
+  LEGA_UID="${LEGA_UID}" \
+  LEGA_GID="${LEGA_GID}"
+
+podman compose \
+  -f docker-compose.yml \
+  -f docker-compose.distribution.yml \
+  build
 ```
 
-Compose usa `LEGA_UID` y `LEGA_GID` de `.env` para construir el handler y
-`LEGA_GID` para construir Inbox. También construye las imágenes de Vault DB y
-Distribution. La imagen de Vault DB
-resultante usa el tag de `IMAGE_TAG` (por defecto `latest`).
+Si la versión aprobada del Makefile utiliza objetivos diferentes, consultar:
+
+```bash
+make help 2>/dev/null || make -n images
+```
 
 Registrar los IDs y tags de las imágenes desplegadas:
 
@@ -776,36 +668,27 @@ printf '%s\n' "$PG_SU_PASSWORD_INPUT" > pg_vault_su_password
 unset PG_SU_PASSWORD_INPUT
 ```
 
-Inicializar exactamente la ruta que monta Compose. El directorio del NFS ya
-debe pertenecer al UID/GID interno `999:999`, como se indicó arriba:
+Inicializar según el procedimiento de la versión aprobada:
 
 ```bash
-make init-vault \
-  DB_DATA="${LOCALEGA_DATA_BASE}/vault-db" \
-  VAULT_INIT_IMAGE="localega/vault-db:${IMAGE_TAG:-latest}" \
-  VAULT_INIT_USER=postgres \
-  DOCKER=podman
+make init-vault
 ```
-
-Ejecutar el inicializador como `postgres` evita que el usuario rootless
-intente reasignar recursivamente la propiedad del NFS. El comando se detiene
-si ya existe `PG_VERSION`; no es un procedimiento de migración.
 
 Arrancar `vault-db` y comprobarlo:
 
 ```bash
 podman compose up -d vault-db
 
-podman exec "${CONTAINER_PREFIX:-}vault-db" \
+podman exec vault-db \
   pg_isready -U postgres -d ega
 
-podman logs --tail 100 "${CONTAINER_PREFIX:-}vault-db"
+podman logs --tail 100 vault-db
 ```
 
 Aplicar las contraseñas de los roles sin escribirlas en el historial. Una opción es entrar de forma interactiva:
 
 ```bash
-podman exec -it "${CONTAINER_PREFIX:-}vault-db" \
+podman exec -it vault-db \
   psql -U postgres -d ega
 ```
 
@@ -818,27 +701,10 @@ Dentro de `psql`:
 
 Las contraseñas introducidas deben coincidir con `LEGA_DB_PASSWORD` y `DISTRIBUTION_DB_PASSWORD`.
 
-Cargar la capa SQL de Distribution. La inicialización de Vault ya creó el rol
-`distribution`; este objetivo conserva las funciones de conversión de UID del
-primer script y omite solamente su sentencia `CREATE USER`:
-
-```bash
-make load-distribution DOCKER=podman \
-  VAULT_DB_CONTAINER="${CONTAINER_PREFIX:-}vault-db"
-```
-
-El objetivo usa `psql -v ON_ERROR_STOP=1` dentro de `vault-db` y detiene la
-instalación ante un error SQL. Comprobar que los esquemas están presentes:
-
-```bash
-podman exec "${CONTAINER_PREFIX:-}vault-db" psql -U postgres -d ega -Atc \
-  "SELECT to_regnamespace('fs'), to_regnamespace('nss');"
-```
-
 Validación mínima:
 
 ```bash
-podman exec "${CONTAINER_PREFIX:-}vault-db" \
+podman exec vault-db \
   psql -U postgres -d ega -Atc \
   'SELECT current_database(), current_user, now();'
 ```
@@ -848,11 +714,14 @@ podman exec "${CONTAINER_PREFIX:-}vault-db" \
 Arrancar por fases facilita localizar fallos:
 
 ```bash
-cd "${REPO_DIR:-/opt/containers_apps/localega/LocalEGA}/deploy/docker"
+cd /opt/containers_apps/localega/LocalEGA/deploy/docker
 
 podman compose up -d vault-db mq inbox
 podman compose up -d --no-deps handler
-localega_compose up -d --no-deps nss-sync distribution
+podman compose \
+  -f docker-compose.yml \
+  -f docker-compose.distribution.yml \
+  up -d --no-deps nss-sync distribution
 ```
 
 Resultado esperado:
@@ -958,14 +827,14 @@ El mecanismo elegido debe:
 podman ps -a \
   --format 'table {{.Names}}\t{{.Status}}\t{{.Networks}}'
 
-podman inspect "${CONTAINER_PREFIX:-}mq" \
+podman inspect mq \
   --format '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}'
-podman exec "${CONTAINER_PREFIX:-}inbox" getent hosts mq
-podman exec "${CONTAINER_PREFIX:-}handler" getent hosts mq
+podman exec inbox getent hosts mq
+podman exec handler getent hosts mq
 
-podman inspect "${CONTAINER_PREFIX:-}vault-db" \
+podman inspect vault-db \
   --format '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}'
-podman exec "${CONTAINER_PREFIX:-}handler" getent hosts vault-db
+podman exec handler getent hosts vault-db
 ```
 
 Los nombres deben resolver únicamente a las IP actuales de los contenedores en las redes compartidas.
@@ -973,10 +842,10 @@ Los nombres deben resolver únicamente a las IP actuales de los contenedores en 
 ### RabbitMQ
 
 ```bash
-podman exec "${CONTAINER_PREFIX:-}mq" rabbitmq-diagnostics -q ping
-podman exec "${CONTAINER_PREFIX:-}mq" rabbitmq-diagnostics check_local_alarms
+podman exec mq rabbitmq-diagnostics -q ping
+podman exec mq rabbitmq-diagnostics check_local_alarms
 
-podman exec "${CONTAINER_PREFIX:-}mq" rabbitmqctl list_queues \
+podman exec mq rabbitmqctl list_queues \
   name messages messages_ready messages_unacknowledged consumers |
   egrep 'from_cega|to_cega|errors|system.errors'
 ```
@@ -992,9 +861,9 @@ Resultado esperado:
 ### PostgreSQL
 
 ```bash
-podman exec "${CONTAINER_PREFIX:-}vault-db" pg_isready -U postgres -d ega
+podman exec vault-db pg_isready -U postgres -d ega
 
-podman exec "${CONTAINER_PREFIX:-}vault-db" \
+podman exec vault-db \
   psql -U postgres -d ega -Atc \
   'SELECT current_database(), current_user, now();'
 ```
@@ -1004,7 +873,7 @@ podman exec "${CONTAINER_PREFIX:-}vault-db" \
 Sustituir usuario e IDs por un usuario CEGA real:
 
 ```bash
-podman exec --user <UID_EGA>:<INBOX_GID> "${CONTAINER_PREFIX:-}inbox" sh -c '
+podman exec --user <UID_EGA>:<INBOX_GID> inbox sh -c '
   test -r "/ega/inbox/<USUARIO_EGA>" && echo READABLE
   test -w "/ega/inbox/<USUARIO_EGA>" && echo WRITABLE
 '
@@ -1015,7 +884,7 @@ podman exec --user <UID_EGA>:<INBOX_GID> "${CONTAINER_PREFIX:-}inbox" sh -c '
 ```bash
 for service in mq vault-db inbox handler nss-sync distribution; do
   echo "===== $service ====="
-  podman logs --tail 100 "${CONTAINER_PREFIX:-}$service"
+  podman logs --tail 100 "$service"
 done
 
 find "${LOCALEGA_LOG_DIR}" \
@@ -1053,15 +922,15 @@ Un login SFTP y una escritura en Inbox no demuestran por sí solos que la ingest
 podman ps -a \
   --format 'table {{.Names}}\t{{.Status}}\t{{.Networks}}\t{{.Ports}}'
 
-podman exec "${CONTAINER_PREFIX:-}mq" rabbitmq-diagnostics -q ping
-podman exec "${CONTAINER_PREFIX:-}vault-db" pg_isready -U postgres -d ega
+podman exec mq rabbitmq-diagnostics -q ping
+podman exec vault-db pg_isready -U postgres -d ega
 ```
 
 ### Logs
 
 ```bash
-podman logs --tail 200 "${CONTAINER_PREFIX:-}handler"
-podman logs -f "${CONTAINER_PREFIX:-}handler"
+podman logs --tail 200 handler
+podman logs -f handler
 ```
 
 ### Reiniciar un servicio
@@ -1089,8 +958,7 @@ El backup debe cubrir por separado:
 2. PostgreSQL mediante backup lógico o físico compatible;
 3. Vault e Inbox según la política del NFS;
 4. NSS, authorized keys y SQLite auxiliares;
-5. el volumen nombrado de RabbitMQ (`mq-data`), según la política de recuperación de colas;
-6. documentación de versiones de código e imágenes.
+5. documentación de versiones de código e imágenes.
 
 ### Configuración
 
@@ -1111,7 +979,7 @@ El destino debe estar cifrado, restringido y sujeto a la política de gestión d
 ### PostgreSQL
 
 ```bash
-podman exec "${CONTAINER_PREFIX:-}vault-db" \
+podman exec vault-db \
   pg_dump -U postgres -d ega \
   > "$BACKUP_DIR/vault-db_ega.sql"
 ```
@@ -1142,13 +1010,16 @@ Una actualización debe prepararse en una rama/tag aprobada y disponer de:
 Secuencia orientativa:
 
 ```bash
-cd "${REPO_DIR:-/opt/containers_apps/localega/LocalEGA}"
+cd /opt/containers_apps/localega/LocalEGA
 git fetch --all --tags
 git checkout <TAG_O_RAMA_APROBADA>
 git submodule update --init --recursive
 
 cd deploy/docker
-localega_compose config >/dev/null
+podman compose \
+  -f docker-compose.yml \
+  -f docker-compose.distribution.yml \
+  config >/tmp/localega-compose-updated.yml
 ```
 
 Construir y recrear únicamente los servicios afectados. No ejecutar `podman system prune --volumes`, borrar rutas persistentes ni eliminar el almacenamiento rootless como parte de una actualización normal.
@@ -1160,10 +1031,10 @@ Construir y recrear únicamente los servicios afectados. No ejecutar `podman sys
 Comparar:
 
 ```bash
-podman inspect "${CONTAINER_PREFIX:-}mq" \
+podman inspect mq \
   --format '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}'
-podman exec "${CONTAINER_PREFIX:-}inbox" getent hosts mq
-podman exec "${CONTAINER_PREFIX:-}handler" getent hosts mq
+podman exec inbox getent hosts mq
+podman exec handler getent hosts mq
 ```
 
 No reiniciar globalmente el DNS rootless sin comprobar qué otros stacks utiliza el mismo usuario. Primero identificar contenedores duplicados, almacenes Podman alternativos y redes antiguas.
@@ -1183,7 +1054,7 @@ Comprobar primero desde host y contenedor:
 
 ```bash
 stat "${LOCALEGA_DATA_BASE}/inbox"
-podman exec "${CONTAINER_PREFIX:-}inbox" stat /ega/inbox
+podman exec inbox stat /ega/inbox
 findmnt -T "${LOCALEGA_DATA_BASE}/inbox"
 ```
 
@@ -1192,8 +1063,8 @@ Si el host funciona y el contenedor conserva un handle obsoleto, recrear únicam
 ### Vault DB devuelve `Permission denied`
 
 ```bash
-podman logs --tail 200 "${CONTAINER_PREFIX:-}vault-db"
-podman top "${CONTAINER_PREFIX:-}vault-db" hpid huser hgroup user group args
+podman logs --tail 200 vault-db
+podman top vault-db hpid huser hgroup user group args
 findmnt -T "${LOCALEGA_DATA_BASE}/vault-db"
 ```
 
@@ -1202,10 +1073,10 @@ Comparar el propietario del NFS con el UID/GID subordinado que corresponde al us
 ### El handler no consume mensajes
 
 ```bash
-podman logs --tail 200 "${CONTAINER_PREFIX:-}handler"
-podman exec "${CONTAINER_PREFIX:-}handler" getent hosts mq
-podman exec "${CONTAINER_PREFIX:-}handler" getent hosts vault-db
-podman exec "${CONTAINER_PREFIX:-}mq" rabbitmqctl list_queues \
+podman logs --tail 200 handler
+podman exec handler getent hosts mq
+podman exec handler getent hosts vault-db
+podman exec mq rabbitmqctl list_queues \
   name messages messages_ready messages_unacknowledged consumers
 ```
 
@@ -1220,8 +1091,8 @@ Comprobar que el fichero fue cifrado con la `service.key.pub` correspondiente a 
 ```bash
 ls -lah "${LOCALEGA_BIND_BASE}/etc/nss"
 ls -lah "${LOCALEGA_BIND_BASE}/etc/authorized_keys"
-podman logs --tail 200 "${CONTAINER_PREFIX:-}nss-sync"
-podman logs --tail 200 "${CONTAINER_PREFIX:-}distribution"
+podman logs --tail 200 nss-sync
+podman logs --tail 200 distribution
 ```
 
 ### Espacio de Podman
@@ -1251,10 +1122,7 @@ podman images --filter dangling=true
 - [ ] Propietarios y permisos de NFS verificados.
 - [ ] Configuración local y logs con permisos correctos.
 - [ ] Imágenes construidas y registradas.
-- [ ] Vault DB inicializada en la ruta que monta Compose y roles configurados.
-- [ ] `vault.dirpath` coincide con el montaje de Vault en Distribution.
-- [ ] Capa SQL de Distribution cargada (`fs` y `nss`).
-- [ ] `.env` tiene modo `600`; `pg.conf` y `pg_hba.conf` son legibles por el grupo interno `999` y no por otros.
+- [ ] Vault DB inicializada y roles configurados.
 - [ ] Servicios levantados en las redes esperadas.
 - [ ] DNS interno consistente con las IP actuales.
 - [ ] RabbitMQ sin alarmas y con consumidores activos.

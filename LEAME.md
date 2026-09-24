@@ -9,7 +9,7 @@ La guía separa expresamente:
 - los identificadores internos de los contenedores;
 - los UID/GID subordinados que Podman representa en el host.
 
-No asume una instalación previa ni datos existentes. Las operaciones de actualización, migración y recuperación deben documentarse y ejecutarse por separado.
+No asume una instalación previa ni datos existentes. Para sustituir los contenedores de la VM conservando la base, Vault y claves actuales, seguir [el procedimiento de sustitución](docs/redeploy_existing_vm.md). Las demás operaciones de actualización, migración y recuperación deben documentarse y ejecutarse por separado.
 
 ## Índice
 
@@ -102,7 +102,7 @@ En la VM:
 - cliente PostgreSQL para comprobaciones administrativas;
 - herramientas SELinux (`semanage` y `restorecon`) si SELinux está activo.
 
-`crypt4gh` se necesita en el entorno donde se generan o inspeccionan las claves Crypt4GH. En este contexto donde se produzca la encriptaciÓn de los ficheros. Fuera del enterno de la VM.
+El módulo Python `crypt4gh` se necesita en el entorno que extrae el secreto master de `master.key` (en los comandos de esta guía, la VM). Las herramientas para cifrar ficheros pueden ejecutarse fuera de la VM.
 
 Comprobaciones iniciales:
 
@@ -330,7 +330,13 @@ El handler monta:
 - `master.key.pub`;
 - su configuración de aplicación.
 
-El secreto master requerido por Vault DB se obtiene de la clave privada master. Para evitar que la passphrase quede escrita en el historial:
+El secreto master requerido por Vault DB se obtiene de la clave privada master. Comprobar que el módulo Python está disponible en el entorno aprobado:
+
+```bash
+python3 -c 'import crypt4gh.keys'
+```
+
+Para evitar que la passphrase quede escrita en el historial:
 
 ```bash
 python3 - <<'PY'
@@ -360,14 +366,33 @@ cp lega.ini.sample lega.ini
 
 El despliegue centraliza en `.env` las variables soportadas por Compose y los entrypoints.
 
-Antes de continuar, comprobar qué ficheros espera la versión aprobada:
+Al combinar varios YAML, algunas versiones de `podman-compose` imprimen por
+stderr toda la configuración interpolada, incluidas credenciales. Definir una
+función que guarde ese diagnóstico de forma privada y lo elimine si el comando
+termina bien:
 
 ```bash
-podman compose \
-  -f docker-compose.yml \
-  -f docker-compose.distribution.yml \
-  config >/tmp/localega-compose.yml
+localega_compose() {
+  local diagnostic rc
+  diagnostic=$(mktemp /tmp/localega-compose.XXXXXX) || return 1
+  chmod 600 "$diagnostic"
+  if podman compose \
+    -f docker-compose.yml \
+    -f docker-compose.distribution.yml \
+    "$@" 2>"$diagnostic"; then
+    rm -f "$diagnostic"
+  else
+    rc=$?
+    printf 'Compose falló (%s); diagnóstico privado: %s\n' "$rc" "$diagnostic" >&2
+    return "$rc"
+  fi
+}
+
+localega_compose config >/dev/null
 ```
+
+Volver a definir la función al iniciar otra sesión. Si un comando falla,
+revisar el diagnóstico solo en la VM y borrarlo después.
 
 ### Variables locales
 
@@ -391,8 +416,11 @@ INBOX_GID=1003
 SYNC_INTERVAL_SECONDS=60
 EGA_PRECREATE_HOMES=0
 LEGA_LOG=info
-EGA_SSH_BANNER=Affiliated EGA <nombre-afiliado>
+EGA_SSH_BANNER="Affiliated EGA <nombre-afiliado>"
 ```
+
+Los puertos publicados se eligen según el firewall de cada host. En la VM de referencia,
+`DISTRIBUTION_PORT=8087`; el puerto interno de Distribution sigue siendo `2223`.
 
 Usar `LEGA_LOG=debug` únicamente durante validaciones o troubleshooting controlado.
 
@@ -473,6 +501,9 @@ Compose construye internamente `LEGA_DB_CONNECTION` y `FUSE_DB_DSN` a partir de 
 Editar `pg.conf` y `pg_hba.conf` según la política de red. `pg_hba.conf` debe limitar los orígenes a las redes y roles estrictamente necesarios.
 
 Incluir en `pg.conf` el valor de `crypt4gh.master_seckey` generado anteriormente.
+Configurar `vault.dirpath = '/opt/LocalEGA/vault'`: esta ruta se guarda con cada
+accession y debe coincidir con el montaje de Vault dentro de `distribution`.
+No usar la ruta del NFS tal como aparece en el host.
 
 
 ### Validar la configuración
@@ -480,30 +511,44 @@ Incluir en `pg.conf` el valor de `crypt4gh.master_seckey` generado anteriormente
 Sin mostrar secretos:
 
 ```bash
-podman compose \
-  -f docker-compose.yml \
-  -f docker-compose.distribution.yml \
-  config >/tmp/localega-compose-resolved.yml
+localega_compose config >/dev/null
 
 echo 'Compose configuration: OK'
 ```
 
-Proteger los ficheros sensibles:
+Proteger los ficheros sensibles conservando el acceso del usuario `postgres`
+dentro del contenedor. En el host rootless, `0:999` mantiene como propietario
+al operador y asigna el grupo interno de PostgreSQL:
 
 ```bash
-chmod 600 .env pg.conf pg_hba.conf service.key master.key
+chmod 600 .env service.key master.key
+podman unshare chown 0:999 pg.conf pg_hba.conf
+podman unshare chmod 640 pg.conf pg_hba.conf
 chmod 644 service.key.pub master.key.pub
 ```
 
+No poner `pg.conf` en modo `600` con propietario interno `0`: el proceso
+`vault-db`, que se ejecuta como `999:999`, no podría leerlo.
+
 ## Preparar permisos
 
-Cargar la configuración sin imprimirla:
+Cargar únicamente las variables de rutas e IDs necesarias en esta sesión. Leer
+`.env` como datos evita ejecutar su contenido como código de shell:
 
 ```bash
 cd /opt/containers_apps/localega/LocalEGA/deploy/docker
-set -a
-source .env
-set +a
+while IFS='=' read -r name value; do
+  case "$name" in
+    LOCALEGA_DATA_BASE|LOCALEGA_BIND_BASE|LOCALEGA_RUNTIME_BASE|LOCALEGA_LOG_DIR|LEGA_UID|LEGA_GID|INBOX_GID)
+      export "$name=$value"
+      ;;
+  esac
+done < .env
+
+: "${LOCALEGA_DATA_BASE:?falta LOCALEGA_DATA_BASE}"
+: "${LOCALEGA_BIND_BASE:?falta LOCALEGA_BIND_BASE}"
+: "${LOCALEGA_RUNTIME_BASE:?falta LOCALEGA_RUNTIME_BASE}"
+: "${LOCALEGA_LOG_DIR:?falta LOCALEGA_LOG_DIR}"
 ```
 
 Crear la estructura:
@@ -605,6 +650,14 @@ claves      = 600
 
 ### Permisos de configuración local
 
+La clave privada de servicio se genera con el usuario del host, pero debe
+pertenecer al UID/GID interno del handler antes de arrancarlo:
+
+```bash
+podman unshare chown "${LEGA_UID}:${LEGA_GID}" service.key
+podman unshare chmod 600 service.key
+```
+
 ```bash
 podman unshare chown -R \
   999:999 \
@@ -631,21 +684,13 @@ Los logs deben ser escribibles por el usuario del servicio correspondiente. Veri
 ```bash
 cd /opt/containers_apps/localega/LocalEGA/deploy/docker
 
-make images \
-  LEGA_UID="${LEGA_UID}" \
-  LEGA_GID="${LEGA_GID}"
-
-podman compose \
-  -f docker-compose.yml \
-  -f docker-compose.distribution.yml \
-  build
+localega_compose build
 ```
 
-Si la versión aprobada del Makefile utiliza objetivos diferentes, consultar:
-
-```bash
-make help 2>/dev/null || make -n images
-```
+Compose usa `LEGA_UID` y `LEGA_GID` de `.env` para construir el handler y
+`LEGA_GID` para construir Inbox. También construye las imágenes de Vault DB y
+Distribution. La imagen de Vault DB
+resultante se etiqueta como `localega/vault-db:latest`.
 
 Registrar los IDs y tags de las imágenes desplegadas:
 
@@ -668,11 +713,20 @@ printf '%s\n' "$PG_SU_PASSWORD_INPUT" > pg_vault_su_password
 unset PG_SU_PASSWORD_INPUT
 ```
 
-Inicializar según el procedimiento de la versión aprobada:
+Inicializar exactamente la ruta que monta Compose. El directorio del NFS ya
+debe pertenecer al UID/GID interno `999:999`, como se indicó arriba:
 
 ```bash
-make init-vault
+make init-vault \
+  DB_DATA="${LOCALEGA_DATA_BASE}/vault-db" \
+  VAULT_INIT_IMAGE=localega/vault-db:latest \
+  VAULT_INIT_USER=postgres \
+  DOCKER=podman
 ```
+
+Ejecutar el inicializador como `postgres` evita que el usuario rootless
+intente reasignar recursivamente la propiedad del NFS. El comando se detiene
+si ya existe `PG_VERSION`; no es un procedimiento de migración.
 
 Arrancar `vault-db` y comprobarlo:
 
@@ -701,6 +755,22 @@ Dentro de `psql`:
 
 Las contraseñas introducidas deben coincidir con `LEGA_DB_PASSWORD` y `DISTRIBUTION_DB_PASSWORD`.
 
+Cargar la capa SQL de Distribution. La inicialización de Vault ya creó el rol
+`distribution`; este objetivo conserva las funciones de conversión de UID del
+primer script y omite solamente su sentencia `CREATE USER`:
+
+```bash
+make load-distribution DOCKER=podman
+```
+
+El objetivo usa `psql -v ON_ERROR_STOP=1` dentro de `vault-db` y detiene la
+instalación ante un error SQL. Comprobar que los esquemas están presentes:
+
+```bash
+podman exec vault-db psql -U postgres -d ega -Atc \
+  "SELECT to_regnamespace('fs'), to_regnamespace('nss');"
+```
+
 Validación mínima:
 
 ```bash
@@ -718,10 +788,7 @@ cd /opt/containers_apps/localega/LocalEGA/deploy/docker
 
 podman compose up -d vault-db mq inbox
 podman compose up -d --no-deps handler
-podman compose \
-  -f docker-compose.yml \
-  -f docker-compose.distribution.yml \
-  up -d --no-deps nss-sync distribution
+localega_compose up -d --no-deps nss-sync distribution
 ```
 
 Resultado esperado:
@@ -958,7 +1025,8 @@ El backup debe cubrir por separado:
 2. PostgreSQL mediante backup lógico o físico compatible;
 3. Vault e Inbox según la política del NFS;
 4. NSS, authorized keys y SQLite auxiliares;
-5. documentación de versiones de código e imágenes.
+5. el volumen nombrado de RabbitMQ (`mq-data`), según la política de recuperación de colas;
+6. documentación de versiones de código e imágenes.
 
 ### Configuración
 
@@ -1016,10 +1084,7 @@ git checkout <TAG_O_RAMA_APROBADA>
 git submodule update --init --recursive
 
 cd deploy/docker
-podman compose \
-  -f docker-compose.yml \
-  -f docker-compose.distribution.yml \
-  config >/tmp/localega-compose-updated.yml
+localega_compose config >/dev/null
 ```
 
 Construir y recrear únicamente los servicios afectados. No ejecutar `podman system prune --volumes`, borrar rutas persistentes ni eliminar el almacenamiento rootless como parte de una actualización normal.
@@ -1122,7 +1187,10 @@ podman images --filter dangling=true
 - [ ] Propietarios y permisos de NFS verificados.
 - [ ] Configuración local y logs con permisos correctos.
 - [ ] Imágenes construidas y registradas.
-- [ ] Vault DB inicializada y roles configurados.
+- [ ] Vault DB inicializada en la ruta que monta Compose y roles configurados.
+- [ ] `vault.dirpath` coincide con el montaje de Vault en Distribution.
+- [ ] Capa SQL de Distribution cargada (`fs` y `nss`).
+- [ ] `.env` tiene modo `600`; `pg.conf` y `pg_hba.conf` son legibles por el grupo interno `999` y no por otros.
 - [ ] Servicios levantados en las redes esperadas.
 - [ ] DNS interno consistente con las IP actuales.
 - [ ] RabbitMQ sin alarmas y con consumidores activos.

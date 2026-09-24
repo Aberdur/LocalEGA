@@ -19,7 +19,7 @@ deploy/docker/*
 !deploy/docker/.env.example
 !deploy/docker/docker-compose.yml
 !deploy/docker/docker-compose.distribution.yml
-!deploy/docker/docker-compose.distribution.yml
+!deploy/docker/docker-compose.existing-mq.yml
 !deploy/docker/inbox-entrypoint.sh
 !deploy/docker/cega
 !deploy/docker/distribution

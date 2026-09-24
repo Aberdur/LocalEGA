@@ -5,6 +5,9 @@ networks:
   internal:
   vault:
 
+volumes:
+  mq-data: {}
+
 services:
   inbox:
     hostname: inbox
@@ -24,7 +27,10 @@ services:
     ports:
       - "${INBOX_PORT:-8086}:9000"
     image: crg/fega-inbox:latest
-    build: ../../src/inbox
+    build:
+      context: ../../src/inbox
+      args:
+        LEGA_GID: ${LEGA_GID:-1000}
     volumes:
       - ${LOCALEGA_DATA_BASE:-/impact_data/lega_data/lega}/inbox:/ega/inbox
       - ${LOCALEGA_LOG_DIR:-/var/log/local/localega/app}/inbox:/var/log/local/localega/app
@@ -44,6 +50,7 @@ services:
     networks:
       - internal
     volumes:
+      - mq-data:/var/lib/rabbitmq
       - ../../src/mq/entrypoint.sh:/usr/local/bin/ega-entrypoint.sh:ro
       - ${LOCALEGA_LOG_DIR:-/var/log/local/localega/app}/mq:/var/log/local/localega/app
     entrypoint: ['/usr/local/bin/ega-entrypoint.sh']

@@ -1,6 +1,9 @@
 SHELL := /bin/bash
 
 DOCKER ?= podman
+DB_DATA ?= $(CURDIR)/data/vault-db
+VAULT_INIT_IMAGE ?= fega/vault-db:latest
+VAULT_INIT_USER ?= root
 
 LEGA_UID := $(shell id -u lega)
 LEGA_GID := $(shell id -g lega)
@@ -50,7 +53,7 @@ init-vault:
 ifeq ("$(wildcard pg_vault_su_password)","")
 	$(error 'Please specify the superuser password file "pg_vault_su_password"')
 endif
-	make -C ../../src/vault init DB_DATA=$(shell pwd)/data/vault-db PG_SU_PASSWORD=$(file < pg_vault_su_password)
+	POSTGRES_PASSWORD="$$(cat pg_vault_su_password)" $(MAKE) -C ../../src/vault init DB_DATA="$(DB_DATA)" DOCKER="$(DOCKER)" IMG="$(VAULT_INIT_IMAGE)" INIT_USER="$(VAULT_INIT_USER)"
 
 # Connect to the database from the host machine
 export PGHOST=localhost
@@ -103,6 +106,18 @@ export PGDATABASE=ega
 
 load-%:
 	psql < ../../src/distribution/src/db/$*
+
+# Vault initialization already creates the distribution role. Keep the UID
+# conversion functions in 10-init.sql and omit only its CREATE USER statement.
+DISTRIBUTION_SQL_FILES=$(SQL_FILES)
+load-distribution: $(DISTRIBUTION_SQL_FILES:%=load-distribution-%)
+	@:
+
+load-distribution-10-init.sql:
+	set -o pipefail; sed '/^CREATE USER distribution WITH LOGIN ENCRYPTED PASSWORD /d' ../../src/distribution/src/db/10-init.sql | $(DOCKER) exec -i vault-db psql -v ON_ERROR_STOP=1 -U postgres -d ega
+
+load-distribution-%:
+	$(DOCKER) exec -i vault-db psql -v ON_ERROR_STOP=1 -U postgres -d ega < ../../src/distribution/src/db/$*
 
 nss-users:
 	psql -c 'SELECT * FROM nss.make_users();'

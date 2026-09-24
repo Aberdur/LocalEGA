@@ -3,8 +3,8 @@ services:
     build:
       context: ../..
       dockerfile: deploy/docker/distribution/Dockerfile
-    image: localega/distribution:latest
-    container_name: distribution
+    image: localega/distribution:${IMAGE_TAG:-latest}
+    container_name: ${CONTAINER_PREFIX:-}distribution
     ports:
       - "${DISTRIBUTION_PORT:-2224}:2223"
     networks:
@@ -29,7 +29,7 @@ services:
 
   nss-sync:
     image: ubuntu:22.04
-    container_name: nss-sync
+    container_name: ${CONTAINER_PREFIX:-}nss-sync
     environment:
       SYNC_INTERVAL_SECONDS: ${SYNC_INTERVAL_SECONDS:-60}
     volumes:

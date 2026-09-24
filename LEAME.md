@@ -374,6 +374,8 @@ cp .env.example .env
 cp ../../src/vault/pg.conf.sample pg.conf
 cp ../../src/vault/pg_hba.conf.sample pg_hba.conf
 cp lega.ini.sample lega.ini
+chmod 600 .env pg.conf pg_hba.conf
+chmod 644 lega.ini
 ```
 
 Comprobar que el módulo Python está disponible y escribir el secreto master

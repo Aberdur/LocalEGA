@@ -363,29 +363,8 @@ El handler monta:
 - `master.key.pub`;
 - su configuración de aplicación.
 
-El secreto master requerido por Vault DB se obtiene de la clave privada master. Comprobar que el módulo Python está disponible en el entorno aprobado:
-
-```bash
-python3 -c 'import crypt4gh.keys'
-```
-
-Para evitar que la passphrase quede escrita en el historial:
-
-```bash
-python3 - <<'PY'
-from getpass import getpass
-import crypt4gh.keys
-
-passphrase = getpass("Master key passphrase: ")
-key = crypt4gh.keys.get_private_key(
-    "master.key",
-    lambda: passphrase,
-)
-print(key.hex())
-PY
-```
-
-El valor debe configurarse en `pg.conf` como `crypt4gh.master_seckey`. No mostrarlo en logs ni guardarlo en archivos temporales sin protección.
+El secreto master requerido por Vault DB se obtiene de la clave privada
+master después de crear `pg.conf`. No imprimirlo en la terminal.
 
 ## Configurar el despliegue
 
@@ -395,6 +374,53 @@ cp .env.example .env
 cp ../../src/vault/pg.conf.sample pg.conf
 cp ../../src/vault/pg_hba.conf.sample pg_hba.conf
 cp lega.ini.sample lega.ini
+```
+
+Comprobar que el módulo Python está disponible y escribir el secreto master
+directamente en `pg.conf`. El script también fija `vault.dirpath` a la ruta
+que monta Distribution. La passphrase se solicita de forma interactiva y no
+aparece en el historial ni en la salida:
+
+```bash
+python3 -c 'import crypt4gh.keys'
+python3 - <<'PY'
+from getpass import getpass
+from pathlib import Path
+import os
+import re
+import tempfile
+import crypt4gh.keys
+
+path = Path("pg.conf")
+config = path.read_text()
+key = crypt4gh.keys.get_private_key(
+    "master.key", lambda: getpass("Master key passphrase: ")
+)
+if len(key) != 32:
+    raise SystemExit("La clave master debe tener 32 bytes")
+config, count_key = re.subn(
+    r"(?m)^crypt4gh\.master_seckey\s*=.*$",
+    "crypt4gh.master_seckey = '" + key.hex() + "'",
+    config,
+)
+config, count_vault = re.subn(
+    r"(?m)^vault\.dirpath\s*=.*$",
+    "vault.dirpath = '/opt/LocalEGA/vault'",
+    config,
+)
+if (count_key, count_vault) != (1, 1):
+    raise SystemExit("pg.conf no contiene exactamente una línea para cada ajuste")
+fd, tmp = tempfile.mkstemp(prefix=".pg.conf.", dir=".")
+try:
+    os.fchmod(fd, 0o600)
+    with os.fdopen(fd, "w") as stream:
+        stream.write(config)
+    os.replace(tmp, path)
+finally:
+    if os.path.exists(tmp):
+        os.unlink(tmp)
+print("pg.conf actualizado sin mostrar el secreto")
+PY
 ```
 
 El despliegue centraliza en `.env` las variables soportadas por Compose y los entrypoints.

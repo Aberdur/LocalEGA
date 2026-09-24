@@ -13,7 +13,7 @@ services:
     hostname: inbox
     depends_on:
       - mq
-    container_name: inbox
+    container_name: ${CONTAINER_PREFIX:-}inbox
     networks:
       - external
       - internal
@@ -26,7 +26,7 @@ services:
       EGA_SSH_BANNER: ${EGA_SSH_BANNER:-Affiliated EGA}
     ports:
       - "${INBOX_PORT:-8086}:9000"
-    image: crg/fega-inbox:latest
+    image: crg/fega-inbox:${IMAGE_TAG:-latest}
     build:
       context: ../../src/inbox
       args:
@@ -46,7 +46,7 @@ services:
     ports:
       - "${MQ_MANAGEMENT_PORT:-15672}:15672"
     image: rabbitmq:3.11.10-management-alpine
-    container_name: mq
+    container_name: ${CONTAINER_PREFIX:-}mq
     networks:
       - internal
     volumes:
@@ -60,13 +60,13 @@ services:
     depends_on:
       - mq
     hostname: handler
-    image: fega/handler:latest
+    image: fega/handler:${IMAGE_TAG:-latest}
     build:
       context: ../../src/handler
       args:
         LEGA_UID: ${LEGA_UID:-1000}
         LEGA_GID: ${LEGA_GID:-1000}
-    container_name: handler
+    container_name: ${CONTAINER_PREFIX:-}handler
     group_add:
       - "${INBOX_GID:-1000}"
     env_file:
@@ -92,8 +92,8 @@ services:
     depends_on:
       - vault-db
     hostname: inbox-cleaner
-    image: fega/handler:latest
-    container_name: inbox-cleaner
+    image: fega/handler:${IMAGE_TAG:-latest}
+    container_name: ${CONTAINER_PREFIX:-}inbox-cleaner
     group_add:
       - "${INBOX_GID:-1000}"
     env_file:
@@ -119,9 +119,9 @@ services:
 
   vault-db:
     hostname: vault
-    image: localega/vault-db:latest
+    image: localega/vault-db:${IMAGE_TAG:-latest}
     build: ../../src/vault
-    container_name: vault-db
+    container_name: ${CONTAINER_PREFIX:-}vault-db
     environment:
       PGDATA: /ega/data
     volumes:

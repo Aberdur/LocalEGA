@@ -4,6 +4,7 @@ DOCKER ?= podman
 DB_DATA ?= $(CURDIR)/data/vault-db
 VAULT_INIT_IMAGE ?= fega/vault-db:latest
 VAULT_INIT_USER ?= root
+VAULT_DB_CONTAINER ?= vault-db
 
 LEGA_UID := $(shell id -u lega)
 LEGA_GID := $(shell id -g lega)
@@ -67,7 +68,7 @@ psql:
 # Apply the Inbox cleanup table to an existing Vault DB. New databases load
 # it automatically from src/vault/initdb.d/35-inbox-cleanup.sql.
 apply-inbox-cleanup-migration:
-	$(DOCKER) exec -i vault-db psql -v ON_ERROR_STOP=1 -U postgres -d ega < ../../src/vault/initdb.d/35-inbox-cleanup.sql
+	$(DOCKER) exec -i $(VAULT_DB_CONTAINER) psql -v ON_ERROR_STOP=1 -U postgres -d ega < ../../src/vault/initdb.d/35-inbox-cleanup.sql
 
 
 #############################
@@ -114,10 +115,10 @@ load-distribution: $(DISTRIBUTION_SQL_FILES:%=load-distribution-%)
 	@:
 
 load-distribution-10-init.sql:
-	set -o pipefail; sed '/^CREATE USER distribution WITH LOGIN ENCRYPTED PASSWORD /d' ../../src/distribution/src/db/10-init.sql | $(DOCKER) exec -i vault-db psql -v ON_ERROR_STOP=1 -U postgres -d ega
+	set -o pipefail; sed '/^CREATE USER distribution WITH LOGIN ENCRYPTED PASSWORD /d' ../../src/distribution/src/db/10-init.sql | $(DOCKER) exec -i $(VAULT_DB_CONTAINER) psql -v ON_ERROR_STOP=1 -U postgres -d ega
 
 load-distribution-%:
-	$(DOCKER) exec -i vault-db psql -v ON_ERROR_STOP=1 -U postgres -d ega < ../../src/distribution/src/db/$*
+	$(DOCKER) exec -i $(VAULT_DB_CONTAINER) psql -v ON_ERROR_STOP=1 -U postgres -d ega < ../../src/distribution/src/db/$*
 
 nss-users:
 	psql -c 'SELECT * FROM nss.make_users();'

@@ -1,11 +1,13 @@
 SHELL := /bin/bash
 
 DOCKER ?= podman
-
-LEGA_UID := $(shell id -u lega)
-LEGA_GID := $(shell id -g lega)
-# LEGA_UID := $(shell id -u)
-# LEGA_GID := $(shell id -g)
+LOCALEGA_DATA_BASE ?= $(CURDIR)/data
+DB_DATA ?= $(LOCALEGA_DATA_BASE)/vault-db
+LEGA_UID ?= 1000
+LEGA_GID ?= 1000
+POSTGRES_UID ?= 999
+POSTGRES_GID ?= 999
+VAULT_INIT_USER ?= $(POSTGRES_UID):$(POSTGRES_GID)
 
 #############################
 ## Build docker images
@@ -13,7 +15,7 @@ LEGA_GID := $(shell id -g lega)
 
 define error-lega-gid-message
 Please specify the group id via the LEGA_GID variable.
-For example, by calling "make $@ LEGA_UID=$$(id -g lega)"
+For example, by calling "make $@ LEGA_GID=1000"
 endef
 
 image-inbox:
@@ -24,7 +26,7 @@ endif
 
 define error-lega-ugid-message
 Please specify the user and group ids via the LEGA_UID/LEGA_GID variable.
-For example, by calling "make $@ LEGA_UID=$$(id -u lega) LEGA_GID=$$(id -g lega)"
+For example, by calling "make $@ LEGA_UID=1000 LEGA_GID=1000"
 endef
 
 
@@ -50,7 +52,10 @@ init-vault:
 ifeq ("$(wildcard pg_vault_su_password)","")
 	$(error 'Please specify the superuser password file "pg_vault_su_password"')
 endif
-	make -C ../../src/vault init DB_DATA=$(shell pwd)/data/vault-db PG_SU_PASSWORD=$(file < pg_vault_su_password)
+	POSTGRES_PASSWORD="$$(cat pg_vault_su_password)" $(MAKE) -C ../../src/vault init \
+		DB_DATA="$(DB_DATA)" \
+		DOCKER="$(DOCKER)" \
+		INIT_USER="$(VAULT_INIT_USER)"
 
 # Connect to the database from the host machine
 export PGHOST=localhost

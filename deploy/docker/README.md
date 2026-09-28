@@ -72,9 +72,12 @@ Adjust deployment paths in `.env`. Container-internal handler paths in `lega.ini
 
 # Container images
 
-Create the docker images with:
+Load the deployment settings and create the container images with:
 
-	make -j3 images LEGA_UID=$(id -u lega) LEGA_GID=$(id -g lega)
+	set -a
+	. ./.env
+	set +a
+	make -j3 images
 
 # The vault database
 

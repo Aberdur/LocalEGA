@@ -387,6 +387,8 @@ DISTRIBUTION_PORT=2224
 LEGA_UID=1000
 LEGA_GID=1000
 INBOX_GID=1003
+POSTGRES_UID=999
+POSTGRES_GID=999
 
 SYNC_INTERVAL_SECONDS=60
 EGA_PRECREATE_HOMES=0
@@ -569,7 +571,7 @@ podman unshare find "${LOCALEGA_DATA_BASE}/vault" \
   -type f -exec chmod 640 {} +
 
 podman unshare chown -R \
-  999:999 \
+  "${POSTGRES_UID}:${POSTGRES_GID}" \
   "${LOCALEGA_DATA_BASE}/vault-db"
 
 podman unshare find "${LOCALEGA_DATA_BASE}/vault-db" \
@@ -668,7 +670,9 @@ printf '%s\n' "$PG_SU_PASSWORD_INPUT" > pg_vault_su_password
 unset PG_SU_PASSWORD_INPUT
 ```
 
-Inicializar según el procedimiento de la versión aprobada:
+Inicializar con el usuario `postgres` de la imagen. El objetivo utiliza
+`POSTGRES_UID` y `POSTGRES_GID` cargados desde `.env`; no debe ejecutarse con
+`sudo` ni requiere cambiar temporalmente los permisos del NFS:
 
 ```bash
 make init-vault

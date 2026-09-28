@@ -393,7 +393,7 @@ POSTGRES_GID=999
 SYNC_INTERVAL_SECONDS=60
 EGA_PRECREATE_HOMES=0
 LEGA_LOG=info
-EGA_SSH_BANNER=Affiliated EGA <nombre-afiliado>
+EGA_SSH_BANNER='Affiliated EGA <nombre-afiliado>'
 ```
 
 Usar `LEGA_LOG=debug` únicamente durante validaciones o troubleshooting controlado.

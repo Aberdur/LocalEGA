@@ -561,9 +561,14 @@ Registrar los resultados de la instalación. No copiar IDs subordinados desde ot
 
 ### Permisos del NFS
 
+En una instalación nueva, comprobar que `inbox`, `staging`, `vault` y `vault-db` están vacíos antes de cambiar sus propietarios. Si contienen datos, detenerse.
+
 Los siguientes comandos usan IDs internos y funcionan cuando el usuario rootless puede cambiar propietarios:
 
 ```bash
+podman unshare chown "0:${INBOX_GID}" "${LOCALEGA_DATA_BASE}/inbox"
+podman unshare chmod 2775 "${LOCALEGA_DATA_BASE}/inbox"
+
 podman unshare chown -R \
   "${LEGA_UID}:${LEGA_GID}" \
   "${LOCALEGA_DATA_BASE}/staging"
@@ -590,6 +595,29 @@ podman unshare find "${LOCALEGA_DATA_BASE}/vault-db" \
   -type d -exec chmod 700 {} +
 podman unshare find "${LOCALEGA_DATA_BASE}/vault-db" \
   -type f -exec chmod 600 {} +
+```
+
+Si `podman unshare chown` devuelve `Operation not permitted` en NFS, detener ese bloque. Como administrador, usar los IDs **del host** obtenidos en «Resolver propietarios efectivos» y cambiar solo las cuatro raíces vacías, sin `-R`. El propietario del Inbox es el usuario Podman del host; su grupo es `INBOX_GID` traducido:
+
+```bash
+NFS_BASE=/impact_data/lega_data/lega
+# Sustituir los valores siguientes por los IDs calculados en este host.
+HOST_PODMAN_UID=<UID_HOST_PODMAN>
+HOST_INBOX_GID=<GID_HOST_INBOX>
+HOST_LEGA_UID=<UID_HOST_LEGA>
+HOST_LEGA_GID=<GID_HOST_LEGA>
+HOST_REQUESTERS_GID=<GID_HOST_REQUESTERS>
+HOST_POSTGRES_UID=<UID_HOST_POSTGRES>
+HOST_POSTGRES_GID=<GID_HOST_POSTGRES>
+
+sudo chown "$HOST_PODMAN_UID:$HOST_INBOX_GID" "$NFS_BASE/inbox"
+sudo chmod 2775 "$NFS_BASE/inbox"
+sudo chown "$HOST_LEGA_UID:$HOST_LEGA_GID" "$NFS_BASE/staging"
+sudo chmod 2770 "$NFS_BASE/staging"
+sudo chown "$HOST_LEGA_UID:$HOST_REQUESTERS_GID" "$NFS_BASE/vault"
+sudo chmod 2750 "$NFS_BASE/vault"
+sudo chown "$HOST_POSTGRES_UID:$HOST_POSTGRES_GID" "$NFS_BASE/vault-db"
+sudo chmod 700 "$NFS_BASE/vault-db"
 ```
 
 El Inbox requiere un tratamiento adicional:

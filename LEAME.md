@@ -244,7 +244,19 @@ sudo chown -R \
   /opt/containers_apps/localega \
   /srv/containers/bind/localega \
   /var/log/local/localega
+
+# El usuario rootless debe poder crear los subdirectorios del NFS.
+sudo chown <USUARIO_PODMAN>:<GRUPO_PODMAN> /impact_data/lega_data/lega
+sudo chmod 775 /impact_data/lega_data/lega
 ```
+
+Como `<USUARIO_PODMAN>`, comprobar que el directorio NFS es escribible:
+
+```bash
+test -w /impact_data/lega_data/lega && echo 'NFS escribible'
+```
+
+Si `chown` falla o la prueba no muestra `NFS escribible`, solicitar al administrador del NFS que asigne el propietario en el servidor antes de continuar.
 
 La propiedad definitiva de los subdirectorios del NFS se configura más adelante según los IDs internos de cada contenedor. No se debe hacer un `chown -R` indiscriminado de un NFS que ya contenga datos.
 

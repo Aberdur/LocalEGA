@@ -600,18 +600,34 @@ podman unshare find "${LOCALEGA_DATA_BASE}/vault-db" \
   -type f -exec chmod 600 {} +
 ```
 
-Si `podman unshare chown` devuelve `Operation not permitted` en NFS, detener ese bloque. Como administrador, usar los IDs **del host** obtenidos en «Resolver propietarios efectivos» y cambiar solo las cuatro raíces vacías, sin `-R`. El propietario del Inbox es el usuario Podman del host; su grupo es `INBOX_GID` traducido:
+Si `podman unshare chown` devuelve `Operation not permitted` en NFS, detener ese bloque. Ejecutar lo siguiente con una cuenta con `sudo` sobre el NFS. Los IDs se introducen a partir de la salida de «Resolver propietarios efectivos», ejecutada antes como usuario Podman: `inbox-group` aporta el GID del Inbox; `handler`, los IDs de staging y vault; `requesters`, el GID de vault; y `postgres`, los IDs de vault-db. No copiar los números de otra VM.
 
 ```bash
+(
+set -e
 NFS_BASE=/impact_data/lega_data/lega
-# Sustituir los valores siguientes por los IDs calculados en este host.
-HOST_PODMAN_UID=<UID_HOST_PODMAN>
-HOST_INBOX_GID=<GID_HOST_INBOX>
-HOST_LEGA_UID=<UID_HOST_LEGA>
-HOST_LEGA_GID=<GID_HOST_LEGA>
-HOST_REQUESTERS_GID=<GID_HOST_REQUESTERS>
-HOST_POSTGRES_UID=<UID_HOST_POSTGRES>
-HOST_POSTGRES_GID=<GID_HOST_POSTGRES>
+PODMAN_USER=bioinfo  # Cambiar si la cuenta Podman tiene otro nombre.
+HOST_PODMAN_UID=$(id -u "$PODMAN_USER")
+
+read -r -p 'GID host de inbox-group: ' HOST_INBOX_GID
+read -r -p 'UID host de handler: ' HOST_LEGA_UID
+read -r -p 'GID host de handler: ' HOST_LEGA_GID
+read -r -p 'GID host de requesters: ' HOST_REQUESTERS_GID
+read -r -p 'UID host de postgres: ' HOST_POSTGRES_UID
+read -r -p 'GID host de postgres: ' HOST_POSTGRES_GID
+
+for value in "$HOST_PODMAN_UID" "$HOST_INBOX_GID" "$HOST_LEGA_UID" "$HOST_LEGA_GID" "$HOST_REQUESTERS_GID" "$HOST_POSTGRES_UID" "$HOST_POSTGRES_GID"; do
+  [[ "$value" =~ ^[0-9]+$ ]] || { echo 'DETENER: ID no numérico'; exit 1; }
+done
+
+for name in inbox staging vault vault-db; do
+  path="$NFS_BASE/$name"
+  [ -d "$path" ] && [ ! -L "$path" ] || { echo "DETENER: $path"; exit 1; }
+  first=$(sudo find "$path" -mindepth 1 -maxdepth 1 -print -quit)
+  [ -z "$first" ] || {
+    echo "DETENER: $path contiene datos"; exit 1;
+  }
+done
 
 sudo chown "$HOST_PODMAN_UID:$HOST_INBOX_GID" "$NFS_BASE/inbox"
 sudo chmod 2775 "$NFS_BASE/inbox"
@@ -621,6 +637,7 @@ sudo chown "$HOST_LEGA_UID:$HOST_REQUESTERS_GID" "$NFS_BASE/vault"
 sudo chmod 2750 "$NFS_BASE/vault"
 sudo chown "$HOST_POSTGRES_UID:$HOST_POSTGRES_GID" "$NFS_BASE/vault-db"
 sudo chmod 700 "$NFS_BASE/vault-db"
+)
 ```
 
 El Inbox requiere un tratamiento adicional:

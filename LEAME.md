@@ -290,22 +290,25 @@ Configurar el montaje NFS de forma persistente antes de arrancar LocalEGA.
 
 ```bash
 cd /opt/containers_apps/localega
-git clone --recurse-submodules \
-  <URL_REPOSITORIO_LOCALEGA> \
+git clone \
+  https://gitlab.isciii.es/bu-isciii/localega.git \
   LocalEGA
 cd LocalEGA
 ```
 
-Seleccionar exclusivamente una rama o tag aprobada:
+Seleccionar exclusivamente el commit aprobado:
 
 ```bash
 git fetch --all --tags
-git checkout <TAG_O_RAMA_APROBADA>
-git submodule update --init --recursive
+git checkout --detach <SHA_APROBADO>
 git status --short
 ```
 
-`git status --short` debe estar vacío antes de comenzar una instalación de producción.
+Esta versión institucional incluye una copia fija de todas las dependencias antes
+gestionadas como submódulos, incluidas las anidadas. Su procedencia y commits
+originales se detallan en [`docs/VENDORED_DEPENDENCIES.md`](docs/VENDORED_DEPENDENCIES.md).
+No se necesita acceso a GitHub para clonar el código. `git status --short`
+debe estar vacío antes de comenzar una instalación de producción.
 
 ## Generar las claves
 
@@ -1056,8 +1059,7 @@ Secuencia orientativa:
 ```bash
 cd /opt/containers_apps/localega/LocalEGA
 git fetch --all --tags
-git checkout <TAG_O_RAMA_APROBADA>
-git submodule update --init --recursive
+git checkout --detach <SHA_APROBADO>
 
 cd deploy/docker
 podman compose \

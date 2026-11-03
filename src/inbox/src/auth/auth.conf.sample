@@ -1,0 +1,83 @@
+##########################################
+# Remote database settings (using ReST)
+##########################################
+
+# The username will be appended to the endpoints
+cega_endpoint_username = http://cega_users/users/%s?idType=username
+cega_endpoint_uid = http://cega_users/users/%u?idType=uid
+cega_creds = user:password
+
+
+# Enforce hostname verification.
+# Default: no
+# verify_hostname = yes
+
+# Enforce server verification.
+# Default: no
+# verify_peer = yes
+
+# Absolute path to the CA certificate (in PEM format).
+# Required setting if verify_peer is set to yes. No default value.
+# cacertfile = /etc/ega/CA.cert
+
+# In case of client verification (in PEM format)
+# certfile = /etc/ega/ssl.cert
+# keyfile = /etc/ega/ssl.key
+
+##########################################
+# NSS settings
+##########################################
+
+# Per site configuration, to shift the users id range
+# Default: 10000
+#uid_shift = 1000
+
+# The group to which all users belong.
+# For the moment, only that one.
+# Required setting. No default.
+gid = 997
+
+# Per site configuration, where the home directories are located
+# The user's name will be appended.
+# Required setting. No default.
+homedir_prefix = /ega/inbox
+
+# The user's login shell.
+# Default: /bin/bash
+#shell = /bin/aspshell-r
+
+# days until change allowed
+# Default: 0
+shadow_min = 0
+
+# days before change required
+# Default: 0
+shadow_max = 99999
+
+# days warning for expiration
+# Default: -1
+shadow_warn = 7
+
+# days before account inactive
+# Default: -1
+# shadow_inact = 7
+
+# date when account expires
+# Default: -1
+# shadow_expire = 7
+
+##########################################
+# Cache settings
+##########################################
+
+# Use the SQLite cache
+# Default: yes
+#use_cache = no
+
+# Absolute path to the SQLite database.
+# Required setting. No default value.
+db_path = /run/ega-users.db
+
+# Sets how long a cache entry is valid, in seconds.
+# Default: 3600 (ie 1h).
+# cache_ttl = 86400

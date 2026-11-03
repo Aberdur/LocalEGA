@@ -1,0 +1,27 @@
+version: '3.7'
+
+volumes:
+  inbox:
+
+services:
+  inbox:
+    hostname: inbox
+    container_name: inbox-test
+    environment:
+      - CEGA_ENDPOINT=https://nss.test.ega-archive.org/
+      - CEGA_ENDPOINT_CREDS=user:password
+      - MQ_CONNECTION=amqps://admin:secret@mq:5671/%2F
+      - MQ_EXCHANGE=cega
+      - MQ_ROUTING_KEY=files.inbox
+      - MQ_VERIFY_PEER=yes
+      - MQ_VERIFY_HOSTNAME=no
+      - MQ_CA=/etc/ega/CA.cert
+      - MQ_CLIENT_CERT=/etc/ega/ssl.cert
+      - MQ_CLIENT_KEY=/etc/ega/ssl.key
+      - AUTH_VERIFY_PEER=no
+      - AUTH_VERIFY_HOSTNAME=no
+    ports:
+      - 2223:9000
+    image: crg/fega-inbox:latest
+    volumes:
+      - inbox:/ega/inbox

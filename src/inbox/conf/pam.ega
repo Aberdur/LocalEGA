@@ -1,0 +1,5 @@
+#%PAM-1.0
+auth       requisite    /lib/security/pam_ega_auth.so
+account    requisite    /lib/security/pam_ega_acct.so attrs=0750 bail_on_exists
+password   required     pam_deny.so
+session    requisite    /lib/security/pam_ega_session.so umask=0007

@@ -1,4 +1,4 @@
-⚠️ Please, note that this repository uses git submodules. Use flag `--recurse-submodules` when cloning it, and verify that they have been initialised.
+This institutional snapshot includes its former submodule sources directly. Clone the approved LocalEGA commit without `--recurse-submodules`; see `docs/VENDORED_DEPENDENCIES.md` for upstream revisions.
 
 This document helps you prepare the (mininum) settings for your LocalEGA instance.
 

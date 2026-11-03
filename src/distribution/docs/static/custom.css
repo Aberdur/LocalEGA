@@ -1,0 +1,25 @@
+body { overflow-x: initial !important; } /* Fix readthedocs bug */
+
+.bolditalic { font-weight: bold; font-style:italic; }
+
+#lega,
+#lega-save { margin-bottom: 1.5em; }
+
+#lega tr td,
+#lega-save tr td { font-size: 90%; margin: 0; padding: 0.5em 1em; border: 1px solid #e1e4e5; text-align:left; white-space: initial; vertical-align:middle; }
+#lega tr td:first-child,
+#lega-save tr td:first-child { text-align:right; border:none; font-weight:bold; font-variant: small-caps; }
+#lega tr td:last-child,
+#lega-save tr td:last-child { text-align:center; border:none; }
+
+.lega-stable { color: green; }
+.lega-dev { color: orange; }
+.lega-unstable { color: red; }
+
+
+#lega thead,
+#lega-save thead{ display: none; }
+
+.img-right { float:right; width:50%; }
+
+.youtube_wrapper { float:right; width:50%; margin-bottom:1em; }

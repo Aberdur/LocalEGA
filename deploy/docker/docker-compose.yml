@@ -42,7 +42,7 @@ services:
       CEGA_CONNECTION: ${CEGA_CONNECTION:?set CEGA_CONNECTION in deploy/docker/.env}
     ports:
       - "${MQ_MANAGEMENT_PORT:-15672}:15672"
-    image: rabbitmq:3.11.10-management-alpine
+    image: docker.io/library/rabbitmq:3.11.10-management-alpine
     container_name: mq
     networks:
       - internal

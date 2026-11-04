@@ -2,7 +2,7 @@
 ## Build env
 ##########################
 
-FROM postgres:15 AS BUILD
+FROM docker.io/library/postgres:15 AS BUILD
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -50,7 +50,7 @@ CMD []
 ## Final image
 ##########################
 
-FROM postgres:15
+FROM docker.io/library/postgres:15
 
 LABEL maintainer "CRG System Developers"
 

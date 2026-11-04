@@ -1,7 +1,7 @@
 ##########################
 ## Build env
 ##########################
-FROM python:3.11-slim as BUILD
+FROM docker.io/library/python:3.11-slim as BUILD
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -18,7 +18,7 @@ RUN pip install --upgrade pip && \
 ##########################
 ## Final image
 ##########################
-FROM python:3.11-slim
+FROM docker.io/library/python:3.11-slim
 
 LABEL maintainer "EGA System Developers"
 LABEL org.label-schema.schema-version="2.0"

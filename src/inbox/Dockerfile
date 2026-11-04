@@ -1,4 +1,4 @@
-FROM debian:12-slim AS BUILD
+FROM docker.io/library/debian:12-slim AS BUILD
 
 RUN apt-get update && \
 #    apt-get upgrade && \
@@ -73,7 +73,7 @@ ENTRYPOINT ["entrypoint.sh"]
 ##
 #################################################
 
-FROM debian:12-slim
+FROM docker.io/library/debian:12-slim
 
 LABEL maintainer "EGA System Developers"
 LABEL org.label-schema.schema-version="1.0"

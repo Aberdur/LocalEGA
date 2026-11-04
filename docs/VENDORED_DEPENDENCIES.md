@@ -19,7 +19,9 @@ recursive clone requires only this GitLab project, not GitHub.
 | `src/vault/pg_sqlite_fs` | `https://github.com/silverdaz/pg_sqlite_fs.git` | `491c80d110f5bf7a7d4f500e04c29650f84956f1` |
 
 The original source files and license notices remain at their respective
-paths. Upstream changes are **not** imported automatically: to update a
+paths. The deployment Dockerfiles use fully qualified base-image references;
+this does not alter the vendored application sources. Upstream changes are
+**not** imported automatically: to update a
 dependency, review its new commit and license, re-export its tracked files,
 update this table, rebuild the affected images, and rerun installation and
 end-to-end checks before approving a new LocalEGA commit.

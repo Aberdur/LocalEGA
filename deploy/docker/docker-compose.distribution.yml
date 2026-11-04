@@ -27,7 +27,7 @@ services:
       - nss-sync
 
   nss-sync:
-    image: ubuntu:22.04
+    image: docker.io/library/ubuntu:22.04
     container_name: nss-sync
     environment:
       SYNC_INTERVAL_SECONDS: ${SYNC_INTERVAL_SECONDS:-60}

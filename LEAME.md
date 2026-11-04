@@ -707,17 +707,21 @@ podman unshare chown -R \
   "${LOCALEGA_BIND_BASE}/etc/authorized_keys" \
   "${LOCALEGA_BIND_BASE}/sqlite-boxes"
 
-podman unshare chmod 775 \
+podman unshare chmod 755 \
   "${LOCALEGA_BIND_BASE}/etc/nss" \
   "${LOCALEGA_BIND_BASE}/etc/authorized_keys"
 
-podman unshare chmod 664 \
+podman unshare chmod 644 \
   "${LOCALEGA_BIND_BASE}/etc/nss/users" \
   "${LOCALEGA_BIND_BASE}/etc/nss/groups"
 
-podman unshare chmod 640 \
+podman unshare chmod 600 \
   "${LOCALEGA_BIND_BASE}/etc/nss/passwords"
+
+podman unshare chmod 711 "${LOCALEGA_BIND_BASE}/etc"
 ```
+
+El proceso FUSE de Distribution consulta NSS con el UID del solicitante, por lo que necesita atravesar `etc` y leer `nss/users` y `nss/groups`. No darle escritura sobre NSS ni acceso a `nss/passwords`: puede pertenecer al grupo suplementario `lega` (GID 999 dentro del contenedor). El archivo `fuse-vault-db.conf` contiene credenciales y debe mantenerse en modo `600`; el entrypoint de Distribution fija ese permiso al arrancar.
 
 Los logs deben ser escribibles por el usuario del servicio correspondiente. Verificar cada directorio con un contenedor efímero o con el servicio arrancado antes de la validación funcional.
 

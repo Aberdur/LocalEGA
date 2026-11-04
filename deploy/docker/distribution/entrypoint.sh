@@ -31,13 +31,17 @@ if [[ ! -f "${FUSE_DB_CONF}" ]]; then
     echo "FATAL: ${FUSE_DB_CONF} missing and FUSE_DB_DSN not set" >&2
     exit 1
   fi
-  {
-    echo "dsn = ${FUSE_DB_DSN}"
-    if [[ -f "${FUSE_DB_CONF_TEMPLATE}" ]]; then
-      grep -v '^dsn = ' "${FUSE_DB_CONF_TEMPLATE}"
-    fi
-  } > "${FUSE_DB_CONF}"
+  (
+    umask 077
+    {
+      echo "dsn = ${FUSE_DB_DSN}"
+      if [[ -f "${FUSE_DB_CONF_TEMPLATE}" ]]; then
+        grep -v '^dsn = ' "${FUSE_DB_CONF_TEMPLATE}"
+      fi
+    } > "${FUSE_DB_CONF}"
+  )
 fi
+chmod 0600 "${FUSE_DB_CONF}"
 
 if [[ "${EGA_PRECREATE_HOMES:-1}" != "0" ]]; then
   USERS_FILE=/opt/LocalEGA/etc/nss/users

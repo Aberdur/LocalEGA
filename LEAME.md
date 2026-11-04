@@ -175,16 +175,21 @@ Configuración utilizada en esta guía:
 ```env
 LEGA_UID=1000
 LEGA_GID=1000
-INBOX_GID=1003
+INBOX_GID=1000
 ```
+
+`INBOX_GID` es el GID interno del grupo `lega` de la imagen `inbox`, no el GID del usuario Podman en el host. Con las imágenes construidas en esta guía coincide con `LEGA_GID`; si se usa otra imagen, comprobar su grupo antes de asignar propietarios al NFS.
 
 Para conocer cómo se representa un ID interno en el host:
 
 ```bash
-PROBE=$(mktemp /tmp/localega-idmap.XXXXXX)
+PROBE_DIR=$(mktemp -d /tmp/localega-idmap.XXXXXX)
+PROBE="$PROBE_DIR/id"
+touch "$PROBE"
 podman unshare chown 1000:1000 "$PROBE"
 stat -c 'UID:GID del host = %u:%g' "$PROBE"
 rm -f "$PROBE"
+rmdir "$PROBE_DIR"
 ```
 
 Esta traducción es especialmente importante en una implementación en un servidor NFS. Con `root_squash`, el usuario rootless puede no tener permiso para cambiar propietarios; en ese caso, aplicar los UID/GID traducidos desde una cuenta administrativa o desde el servidor NFS.
@@ -381,7 +386,7 @@ Antes de continuar, comprobar qué ficheros espera la versión aprobada:
 podman compose \
   -f docker-compose.yml \
   -f docker-compose.distribution.yml \
-  config >/tmp/localega-compose.yml
+  config >/dev/null
 ```
 
 ### Variables locales
@@ -401,7 +406,7 @@ DISTRIBUTION_PORT=2224
 
 LEGA_UID=1000
 LEGA_GID=1000
-INBOX_GID=1003
+INBOX_GID=1000
 POSTGRES_UID=999
 POSTGRES_GID=999
 
@@ -410,6 +415,8 @@ EGA_PRECREATE_HOMES=0
 LEGA_LOG=info
 EGA_SSH_BANNER='Affiliated EGA <nombre-afiliado>'
 ```
+
+`EGA_PRECREATE_HOMES` controla la creación inicial de homes por `distribution`; `nss-sync` también crea homes al sincronizar usuarios. Ninguna de estas opciones crea los homes del Inbox.
 
 Usar `LEGA_LOG=debug` únicamente durante validaciones o troubleshooting controlado.
 
@@ -500,7 +507,7 @@ Sin mostrar secretos:
 podman compose \
   -f docker-compose.yml \
   -f docker-compose.distribution.yml \
-  config >/tmp/localega-compose-resolved.yml
+  config >/dev/null
 
 echo 'Compose configuration: OK'
 ```
@@ -542,10 +549,10 @@ Antes de aplicar permisos al NFS, calcular cómo representa el host los IDs inte
 IDMAP_DIR=$(mktemp -d /tmp/localega-idmap.XXXXXX)
 
 for spec in \
-  'handler 1000 1000' \
-  'postgres 999 999' \
-  'inbox-group 1000 1003' \
-  'requesters 1000 20000'
+  "handler ${LEGA_UID} ${LEGA_GID}" \
+  "postgres ${POSTGRES_UID} ${POSTGRES_GID}" \
+  "inbox-group 0 ${INBOX_GID}" \
+  "requesters ${LEGA_UID} 20000"
 do
   set -- $spec
   label=$1
@@ -654,12 +661,38 @@ podman exec inbox getent passwd '<USUARIO_EGA>'
 podman exec inbox id '<USUARIO_EGA>'
 ```
 
-Aplicar los propietarios traducidos al host mediante `podman unshare` o desde una cuenta con permisos administrativos sobre el NFS. Para cada home:
+El módulo PAM del Inbox intenta crear cada home y cambiar su propietario en el primer acceso. En NFS con Podman rootless, el `chown` puede fallar aunque la raíz sea escribible. Si el NFS no permite ese cambio, precrear cada home **antes del primer acceso SFTP** desde una cuenta con permisos administrativos sobre el NFS. No crear todos los homes como `root` o `lega`, ni cambiar propietarios recursivamente de homes existentes.
+
+El módulo de sesión PAM entra en el home como `root` del contenedor antes de iniciar SFTP. Sobre este NFS, ese usuario no puede atravesar un home `2770`; usar `2771` para conceder solo permiso de paso a «otros», sin permitirles listar el directorio. Comprobarlo con `podman exec --user 0 inbox sh -c 'cd "/ega/inbox/<USUARIO_EGA>"'`.
+
+Para cada usuario, traducir sus IDs internos en un fichero temporal local:
+
+```bash
+PROBE_DIR=$(mktemp -d /tmp/localega-inbox-home.XXXXXX)
+PROBE="$PROBE_DIR/id"
+touch "$PROBE"
+podman unshare chown '<UID_EGA>:<INBOX_GID>' "$PROBE"
+stat -c 'UID:GID del host = %u:%g' "$PROBE"
+rm -f "$PROBE"
+rmdir "$PROBE_DIR"
+```
+
+Solo si el home aún no existe, crearlo con esos IDs del host desde la cuenta administradora:
+
+```bash
+sudo mkdir -- '/impact_data/lega_data/lega/inbox/<USUARIO_EGA>'
+sudo chown '<UID_HOST_EGA>:<GID_HOST_INBOX>' \
+  '/impact_data/lega_data/lega/inbox/<USUARIO_EGA>'
+sudo chmod 2771 '/impact_data/lega_data/lega/inbox/<USUARIO_EGA>'
+```
+
+Para cada home:
 
 ```text
 propietario = UID interno del usuario EGA
 grupo       = INBOX_GID
-directorios = 2770 o 2775 según política
+home           = 2771 en este NFS rootless (solo paso para «otros»)
+subdirectorios = 2770 o 2775 según política
 ficheros    = 660
 .ssh        = 700
 claves      = 600
@@ -716,9 +749,24 @@ podman images --format \
   'table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Created}}'
 ```
 
+Antes de arrancar el Inbox, verificar que el grupo de la imagen coincide con `INBOX_GID`:
+
+```bash
+podman run --rm --pull=never \
+  --entrypoint getent crg/fega-inbox:latest group lega
+```
+
+Si el GID mostrado no coincide, detenerse y corregir la configuración o reconstruir la imagen; no cambiar los permisos del NFS para ocultar la discrepancia.
+
 ## Inicializar Vault DB
 
 La inicialización crea el clúster PostgreSQL, los esquemas, roles, tablas, funciones y extensiones que necesita LocalEGA. Es obligatoria en una instalación limpia y no debe repetirse indiscriminadamente sobre una base existente.
+
+Ejecutar los comandos de esta sección desde `deploy/docker`:
+
+```bash
+cd /opt/containers_apps/localega/LocalEGA/deploy/docker
+```
 
 Crear una contraseña de superusuario distinta de las contraseñas de aplicación:
 
@@ -748,6 +796,20 @@ podman exec vault-db \
 
 podman logs --tail 100 vault-db
 ```
+
+Después de crear la red `docker_vault`, comprobar su subred con `podman network inspect docker_vault --format '{{json .Subnets}}'`. Si no coincide con los orígenes permitidos en `pg_hba.conf`, corregir ese fichero y recargar la configuración con `podman exec vault-db psql -U postgres -d ega -c 'SELECT pg_reload_conf();'` antes de conectar los otros servicios.
+
+La inicialización de Vault crea el rol `distribution`, pero no carga los esquemas, vistas y funciones de su submódulo. En una base nueva, cargarlos una sola vez antes de arrancar `distribution` o `nss-sync`:
+
+```bash
+make init-distribution
+
+podman exec vault-db psql -X -v ON_ERROR_STOP=1 \
+  -U postgres -d ega -Atc \
+  "SELECT to_regnamespace('fs'), to_regnamespace('nss'), to_regclass('public.requesters');"
+```
+
+Los tres nombres deben aparecer. El objetivo comprueba que el esquema aún no está cargado y aplica todos los SQL en una transacción. No repetirlo sobre una base en uso.
 
 Aplicar las contraseñas de los roles sin escribirlas en el historial. Una opción es entrar de forma interactiva:
 
@@ -855,7 +917,7 @@ Mantener `INBOX_CLEANUP_DRY_RUN=true` hasta validar candidatos, permisos, compro
 Para ejecución periódica:
 
 ```bash
-podman compose up -d inbox-cleaner
+podman compose up -d --no-deps inbox-cleaner
 ```
 
 ## Arranque automático
@@ -1082,7 +1144,7 @@ cd deploy/docker
 podman compose \
   -f docker-compose.yml \
   -f docker-compose.distribution.yml \
-  config >/tmp/localega-compose-updated.yml
+  config >/dev/null
 ```
 
 Construir y recrear únicamente los servicios afectados. No ejecutar `podman system prune --volumes`, borrar rutas persistentes ni eliminar el almacenamiento rootless como parte de una actualización normal.

@@ -57,6 +57,20 @@ endif
 		DOCKER="$(DOCKER)" \
 		INIT_USER="$(VAULT_INIT_USER)"
 
+init-distribution:
+	@set -euo pipefail; \
+	SQL_DIR=../../src/distribution/src/db; \
+	test "$$(sed -n '6p' "$$SQL_DIR/10-init.sql")" = "CREATE USER distribution WITH LOGIN ENCRYPTED PASSWORD 'change-me';"; \
+	existing=$$($(DOCKER) exec vault-db psql -X -v ON_ERROR_STOP=1 -U postgres -d ega -Atc "SELECT to_regclass('public.requesters')"); \
+	test -z "$$existing" || { echo 'Distribution SQL is already loaded; stopping.' >&2; exit 1; }; \
+	{ printf 'BEGIN;\n'; \
+	  sed -n '7,$$p' "$$SQL_DIR/10-init.sql"; \
+	  for file in 49-private.sql 50-views.sql 51-file-system-functions.sql 52-nss.sql 53-nss-triggers.sql 55-sqlite-fs.sql 60-grants.sql; do \
+	    cat "$$SQL_DIR/$$file"; printf '\n'; \
+	  done; \
+	  printf 'COMMIT;\n'; \
+	} | $(DOCKER) exec -i vault-db psql -X -v ON_ERROR_STOP=1 -U postgres -d ega
+
 # Connect to the database from the host machine
 export PGHOST=localhost
 export PGPORT=5432
